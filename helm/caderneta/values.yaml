@@ -3,8 +3,11 @@ image:
   # Para rodar a imagem que voce buildou local: --set image.repository=caderneta
   # --set image.tag=local (ou `just deploy -i caderneta -t local`).
   repository: ghcr.io/rafalg18/caderneta
-  # Vazio = usa o appVersion do Chart.yaml. Prefira uma tag imutavel (versao ou
-  # sha) a `latest`: com pullPolicy IfNotPresent, `latest` fica velha no node.
+  # Vazio = usa o appVersion do Chart.yaml, que so existe no registry depois de
+  # um `git tag vX.Y.Z` (push no main publica main/sha/latest, nao a versao).
+  # Sem release publicado, use `just deploy -t latest` ou a tag do sha.
+  # Prefira tag imutavel a `latest`: com pullPolicy IfNotPresent, `latest` fica
+  # velha no node.
   tag: ""
   pullPolicy: IfNotPresent
 

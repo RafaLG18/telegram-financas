@@ -19,16 +19,31 @@ jobs:
     name: Testes e lint do chart
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
           enable-cache: true
 
       - run: uv sync --frozen
       - run: uv run pytest -q
 
-      - uses: azure/setup-helm@v4
+      # O chart resolve `image.tag: ""` para o appVersion, e o CI so publica
+      # essa tag a partir de um git tag v*. Se as duas versoes divergirem, o
+      # default do chart aponta pra uma imagem que nao existe — foi assim que
+      # o primeiro deploy quebrou com ImagePullBackOff.
+      - name: Tag v* bate com o appVersion do chart
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          app="$(grep '^appVersion:' helm/caderneta/Chart.yaml | cut -d: -f2 | tr -d ' "')"
+          if [ "$tag" != "$app" ]; then
+            echo "::error::git tag $GITHUB_REF_NAME nao bate com appVersion $app do Chart.yaml"
+            exit 1
+          fi
+          echo "tag $GITHUB_REF_NAME == appVersion $app"
+
+      - uses: azure/setup-helm@v5
       - run: helm lint helm/caderneta --set telegram.botToken=fake
       # Renderiza com a mesma combinacao que o deploy.sh usa: as guardas do
       # chart falham no template, entao isto pega o erro aqui e nao no cluster.
@@ -42,13 +57,16 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: docker/setup-buildx-action@v3
+      # Emulacao para buildar arm64 num runner amd64.
+      - uses: docker/setup-qemu-action@v3
 
-      # Builda uma vez, com a tag local que o compose espera. O scan e o smoke
-      # rodam contra exatamente o binario que vai ser publicado.
-      - uses: docker/build-push-action@v6
+      - uses: docker/setup-buildx-action@v4
+
+      # Build nativo amd64, so pro scan e pro smoke: `load` nao aceita imagem
+      # multi-plataforma, e rodar os testes sob QEMU seria lento sem ganho.
+      - uses: docker/build-push-action@v7
         with:
           context: .
           load: true
@@ -83,7 +101,7 @@ jobs:
       # --------------------------------------------------------------------
       - name: Login no GHCR
         if: github.event_name == 'push'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -92,7 +110,7 @@ jobs:
       - name: Tags da imagem
         if: github.event_name == 'push'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGEM }}
           tags: |
@@ -103,12 +121,18 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       # Reusa o cache do build acima: nao recompila, so empurra.
+      # Multi-plataforma: o node do cluster pode ser arm64 (o pull falha com
+      # "no match for platform in manifest" se a imagem for so amd64).
+      # provenance: false mantem o indice limpo — o manifesto de atestacao
+      # aparece como plataforma "unknown/unknown" e confunde runtime antigo.
       - name: Publica no GHCR
         if: github.event_name == 'push'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
+          provenance: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
