@@ -1,0 +1,107 @@
+name: caderneta
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: caderneta:local
+    container_name: caderneta-bot
+    restart: unless-stopped
+    env_file:
+      # Opcional para que os profiles `scan` e `smoke` rodem antes de existir
+      # um .env. Sem ele, o servico `bot` sobe e para com erro explicito.
+      - path: .env
+        required: false
+    environment:
+      DB_PATH: /data/caderneta.db
+      HEALTH_PORT: "8080"
+    volumes:
+      - caderneta-data:/data
+    ports:
+      # So no loopback: o health nao precisa ficar exposto na rede.
+      - "127.0.0.1:8080:8080"
+    # O container so escreve em /data; o resto do filesystem pode ser read-only.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3).status==200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Scan de vulnerabilidades. Nao sobe no `up` — roda com:
+  #   docker compose --profile scan run --rm trivy
+  trivy:
+    image: aquasec/trivy:0.74.0
+    profiles:
+      - scan
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - trivy-cache:/root/.cache/trivy
+    command:
+      - image
+      - --scanners
+      - vuln
+      - --severity
+      - HIGH,CRITICAL
+      - --ignore-unfixed
+      - --exit-code
+      - "1"
+      - caderneta:local
+
+  # ---------------------------------------------------------------------
+  # Smoke test end-to-end, sem tocar no Telegram real. Roda com:
+  #   docker compose --profile smoke up --abort-on-container-exit
+  # ---------------------------------------------------------------------
+  fake-telegram:
+    image: caderneta:local
+    profiles:
+      - smoke
+    entrypoint: ["python", "/app/scripts/fake_telegram.py"]
+    volumes:
+      - ./scripts/fake_telegram.py:/app/scripts/fake_telegram.py:ro
+    ports:
+      - "127.0.0.1:8081:8081"
+    # Herdaria o HEALTHCHECK da imagem, que aponta pra outra porta.
+    healthcheck:
+      disable: true
+
+  bot-smoke:
+    image: caderneta:local
+    profiles:
+      - smoke
+    depends_on:
+      - fake-telegram
+    environment:
+      BOT_TOKEN: "424242:smoke"
+      OWNER_CHAT_ID: "12345"
+      TELEGRAM_API_URL: "http://fake-telegram:8081"
+      DB_PATH: /data/smoke.db
+      HEALTH_PORT: "8080"
+      TZ: America/Sao_Paulo
+      LOG_LEVEL: INFO
+    volumes:
+      - smoke-data:/data
+    ports:
+      - "127.0.0.1:8082:8080"
+
+volumes:
+  caderneta-data:
+  trivy-cache:
+  smoke-data:

@@ -1,0 +1,51 @@
+Caderneta {{ .Chart.AppVersion }} instalada como "{{ .Release.Name }}".
+
+1. Acompanhe o boot:
+
+   kubectl logs -f -n {{ .Release.Namespace }} \
+     -l app.kubernetes.io/instance={{ .Release.Name }}
+
+   O container aplica `alembic upgrade head` antes de subir o bot.
+
+{{- if not .Values.telegram.ownerChatId }}
+
+2. ATENCAO — OWNER_CHAT_ID esta vazio: o bot esta em modo bootstrap e NAO
+   processa comandos. Mande qualquer mensagem pra ele, pegue o chat_id que
+   aparece na resposta (e no log) e reinstale com:
+
+     helm upgrade {{ .Release.Name }} ./helm/caderneta \
+       --reuse-values --set telegram.ownerChatId=<seu_id>
+{{- else }}
+
+2. Acesso liberado apenas para o chat_id {{ .Values.telegram.ownerChatId }}.
+{{- end }}
+
+{{- if not .Values.telegram.existingSecret }}
+
+3. AVISO DE SEGURANCA: o token foi gravado num Secret criado pelo chart, entao
+   ele fica no historico do release. Para producao, crie o Secret por fora:
+
+     kubectl create secret generic caderneta-token \
+       --from-literal=BOT_TOKEN=<token> -n {{ .Release.Namespace }}
+     helm upgrade {{ .Release.Name }} ./helm/caderneta \
+       --reuse-values --set telegram.existingSecret=caderneta-token \
+       --set telegram.botToken=""
+{{- end }}
+
+{{- if .Values.persistence.enabled }}
+
+4. Backup do banco (o PVC tem resource-policy: keep, entao sobrevive a um
+   `helm uninstall`):
+
+     kubectl exec -n {{ .Release.Namespace }} \
+       deploy/{{ include "caderneta.fullname" . }} -- \
+       sqlite3 {{ .Values.config.dbPath }} ".backup /tmp/bkp.db"
+     kubectl cp {{ .Release.Namespace }}/$(kubectl get pod -n {{ .Release.Namespace }} \
+       -l app.kubernetes.io/instance={{ .Release.Name }} \
+       -o jsonpath='{.items[0].metadata.name}'):/tmp/bkp.db ./caderneta-backup.db
+{{- else }}
+
+4. ATENCAO: persistence.enabled=false — os lancamentos somem a cada restart.
+{{- end }}
+
+Health: GET /healthz (liveness) e /readyz (readiness) na porta {{ .Values.config.healthPort }}.

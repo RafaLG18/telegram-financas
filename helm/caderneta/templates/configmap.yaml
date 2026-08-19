@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "caderneta.fullname" . }}
+  labels:
+    {{- include "caderneta.labels" . | nindent 4 }}
+data:
+  DB_PATH: {{ .Values.config.dbPath | quote }}
+  TZ: {{ .Values.config.tz | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  HEALTH_PORT: {{ .Values.config.healthPort | quote }}
+  OWNER_CHAT_ID: {{ .Values.telegram.ownerChatId | quote }}

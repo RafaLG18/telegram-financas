@@ -1,0 +1,91 @@
+image:
+  repository: caderneta
+  tag: local
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# ATENCAO: um bot em polling nao pode ter duas replicas. A segunda recebe
+# "409 Conflict: terminated by other getUpdates request" e as duas passam a
+# brigar pelos updates. O chart falha de proposito se isto for > 1.
+replicaCount: 1
+
+telegram:
+  # Opcao 1 (recomendada): referenciar um Secret que voce ja criou fora do Helm,
+  # assim o token nunca passa por values.yaml nem pelo histórico do Helm.
+  #   kubectl create secret generic caderneta-token --from-literal=BOT_TOKEN=...
+  existingSecret: ""
+  existingSecretKey: BOT_TOKEN
+
+  # Opcao 2: o chart cria o Secret. Comodo para teste, pior para producao —
+  # o valor fica no release do Helm.
+  botToken: ""
+
+  # Seu chat_id. Vazio = modo bootstrap (o bot so informa o id de quem falar).
+  ownerChatId: ""
+
+config:
+  tz: America/Sao_Paulo
+  logLevel: INFO
+  dbPath: /data/caderneta.db
+  healthPort: 8080
+
+persistence:
+  enabled: true
+  # O SQLite exige ReadWriteOnce: e um arquivo, nao um servidor.
+  accessMode: ReadWriteOnce
+  size: 1Gi
+  storageClass: ""
+  # Reaproveitar um PVC existente (util para restaurar backup).
+  existingClaim: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
+
+livenessProbe:
+  initialDelaySeconds: 15
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

@@ -1,0 +1,15 @@
+apiVersion: v2
+name: caderneta
+description: Bot de Telegram para controle financeiro pessoal
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - telegram
+  - bot
+  - financas
+home: https://github.com/RafaLG18/telegram-financas
+sources:
+  - https://github.com/RafaLG18/telegram-financas
+maintainers:
+  - name: RafaLG18
