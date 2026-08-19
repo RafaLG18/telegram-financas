@@ -85,6 +85,14 @@ script aplica um Secret por stdin e instala com `telegram.existingSecret`.
 O `.env` é lido por regex, não por `source`: arquivo de configuração não
 deveria poder executar comando.
 
+A imagem vem do GHCR, publicada pelo CI a cada push no `main` e em tag
+(`ghcr.io/rafalg18/caderneta`). Para subir a que voce buildou localmente:
+
+```bash
+just build
+just deploy -i caderneta -t local     # + carregar no cluster (kind load / minikube image load)
+```
+
 O caminho manual continua valendo:
 
 ```bash
@@ -103,6 +111,23 @@ token. O PVC tem `helm.sh/resource-policy: keep` — o banco não some num
 `helm uninstall`.
 
 Probes: `/healthz` (liveness) e `/readyz` (readiness, verifica o SQLite).
+
+## CI
+
+`.github/workflows/ci.yml`, em dois jobs:
+
+| Job | O que roda | Quando |
+|---|---|---|
+| `qualidade` | `pytest`, `helm lint`, `helm template` | todo push e PR |
+| `imagem` | build, Trivy, smoke test, publica no GHCR | build/scan/smoke sempre; publica só em `main` e tags `v*` |
+
+A imagem é buildada **uma vez** e é a mesma que passa pelo scan, pelo smoke e
+vai para o registry — scan em artefato diferente do que entra em produção não
+prova nada. O push usa o `GITHUB_TOKEN` do próprio workflow, sem segredo extra.
+
+Tags publicadas: a versão (`0.1.0`, `0.1`) em tag `v*`, o sha completo em todo
+push, e `latest` no `main`. Prefira sha ou versão no deploy: com
+`pullPolicy: IfNotPresent`, `latest` envelhece no node sem avisar.
 
 ## Migrações
 
