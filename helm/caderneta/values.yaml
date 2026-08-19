@@ -27,7 +27,7 @@ telegram:
   ownerChatId: ""
 
 config:
-  tz: America/Sao_Paulo
+  tz: America/Recife
   logLevel: INFO
   dbPath: /data/caderneta.db
   healthPort: 8080
