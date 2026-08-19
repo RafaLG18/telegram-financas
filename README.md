@@ -129,6 +129,11 @@ Tags publicadas: a versão (`0.1.0`, `0.1`) em tag `v*`, o sha completo em todo
 push, e `latest` no `main`. Prefira sha ou versão no deploy: com
 `pullPolicy: IfNotPresent`, `latest` envelhece no node sem avisar.
 
+Como o chart resolve `image.tag: ""` para o `appVersion`, **o default só existe
+no registry depois de um `git tag`**: push no `main` publica `main`/`sha`/`latest`,
+não a versão. Antes do primeiro release, use `just deploy -t latest`. O CI falha
+se uma tag `v*` não bater com o `appVersion` do `Chart.yaml`.
+
 ## Migrações
 
 ```bash
