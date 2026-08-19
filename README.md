@@ -20,12 +20,15 @@ O atalho aceita `50`, `50,90`, `R$ 1.250,00`, e datas relativas (`ontem`,
 ## Arquitetura em uma tela
 
 ```
-Telegram ──polling──> handlers/  ──> core.py ──> SQLite
+Telegram ──polling──> handlers/  ──> core/   ──> SQLite
                       (aiogram)      (regras)    (SQLAlchemy + Alembic)
 ```
 
-`core.py` não importa aiogram. É a única fronteira arquitetural do projeto, e
+`core/` não importa aiogram. É a única fronteira arquitetural do projeto, e
 é o que permite testar as regras sem subir bot e trocar de interface depois.
+Dentro dele, um módulo por domínio — `categorias`, `transacoes`, `relatorios`,
+`rascunhos` — e o `__init__` re-exporta a API pública, então importar do pacote
+ou do módulo específico dá no mesmo.
 
 Decisões que não são óbvias e o motivo:
 
