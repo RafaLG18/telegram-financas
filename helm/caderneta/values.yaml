@@ -1,6 +1,11 @@
 image:
-  repository: caderneta
-  tag: local
+  # Publicada pelo CI (.github/workflows/ci.yml) a cada push no main e em tag.
+  # Para rodar a imagem que voce buildou local: --set image.repository=caderneta
+  # --set image.tag=local (ou `just deploy -i caderneta -t local`).
+  repository: ghcr.io/rafalg18/caderneta
+  # Vazio = usa o appVersion do Chart.yaml. Prefira uma tag imutavel (versao ou
+  # sha) a `latest`: com pullPolicy IfNotPresent, `latest` fica velha no node.
+  tag: ""
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -27,7 +32,7 @@ telegram:
   ownerChatId: ""
 
 config:
-  tz: America/Sao_Paulo
+  tz: America/Recife
   logLevel: INFO
   dbPath: /data/caderneta.db
   healthPort: 8080
