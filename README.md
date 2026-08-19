@@ -72,6 +72,22 @@ o código que ele traz vendorizado era a única fonte de HIGH no scan.
 ## Kubernetes
 
 ```bash
+just deploy-dry                          # valida sem tocar no cluster
+just deploy                              # lê o .env e instala
+just deploy -n financas -t 0.1.0 -i ghcr.io/rafalg18/caderneta
+```
+
+`scripts/deploy.sh` lê o mesmo `.env` do docker compose, cria o namespace,
+aplica o Secret do token e roda `helm upgrade --install`. O token **não** passa
+por `--set`: viraria argumento de processo (visível no `ps`) e ficaria no
+histórico do release, que `helm get values` lê em texto puro — em vez disso o
+script aplica um Secret por stdin e instala com `telegram.existingSecret`.
+O `.env` é lido por regex, não por `source`: arquivo de configuração não
+deveria poder executar comando.
+
+O caminho manual continua valendo:
+
+```bash
 kubectl create secret generic caderneta-token --from-literal=BOT_TOKEN=<token>
 
 helm install caderneta ./helm/caderneta \

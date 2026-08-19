@@ -60,6 +60,14 @@ helm-lint:
 helm-render:
     helm template caderneta {{ chart }} --set telegram.existingSecret=caderneta-token
 
+# Deploy no k8s lendo o .env (helm upgrade --install)
+deploy *args:
+    ./scripts/deploy.sh {{ args }}
+
+# Valida o deploy sem tocar no cluster
+deploy-dry:
+    ./scripts/deploy.sh --dry-run
+
 # Verificacao completa: testes + build + scan + smoke
 check: test scan smoke
 
