@@ -2,8 +2,8 @@ apiVersion: v2
 name: caderneta
 description: Bot de Telegram para controle financeiro pessoal
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.3.0
+appVersion: "0.3.0"
 keywords:
   - telegram
   - bot

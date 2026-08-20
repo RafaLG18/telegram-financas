@@ -82,7 +82,7 @@ o código que ele traz vendorizado era a única fonte de HIGH no scan.
 ```bash
 just deploy-dry                          # valida sem tocar no cluster
 just deploy                              # lê o .env e instala
-just deploy -n financas -t 0.1.0 -i ghcr.io/rafalg18/caderneta
+just deploy -n financas -t 0.3.0 -i ghcr.io/rafalg18/caderneta
 ```
 
 `scripts/deploy.sh` lê o mesmo `.env` do docker compose, cria o namespace,
@@ -110,7 +110,7 @@ helm install caderneta ./helm/caderneta \
   --set telegram.existingSecret=caderneta-token \
   --set telegram.ownerChatId=<seu_chat_id> \
   --set image.repository=<seu-registry>/caderneta \
-  --set image.tag=0.1.0
+  --set image.tag=0.3.0
 ```
 
 O chart **falha no render** (antes de chegar no cluster) se você pedir
@@ -133,7 +133,7 @@ A imagem é buildada **uma vez** e é a mesma que passa pelo scan, pelo smoke e
 vai para o registry — scan em artefato diferente do que entra em produção não
 prova nada. O push usa o `GITHUB_TOKEN` do próprio workflow, sem segredo extra.
 
-Tags publicadas: a versão (`0.1.0`, `0.1`) em tag `v*`, o sha completo em todo
+Tags publicadas: a versão (`0.3.0`, `0.3`) em tag `v*`, o sha completo em todo
 push, e `latest` no `main`. Prefira sha ou versão no deploy: com
 `pullPolicy: IfNotPresent`, `latest` envelhece no node sem avisar.
 
