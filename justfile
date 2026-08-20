@@ -26,7 +26,7 @@ smoke: build
     docker compose --profile smoke up -d
     sleep 10
     @echo "--- respostas do bot ---"
-    curl -s http://127.0.0.1:8081/_respostas | python3 -m json.tool
+    curl -s http://127.0.0.1:8081/_replies | python3 -m json.tool
 
 # Derruba o ambiente de smoke test (inclusive o volume)
 smoke-down:

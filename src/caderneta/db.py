@@ -1,8 +1,8 @@
-"""Engine e sessao.
+"""Engine and session.
 
-SQLAlchemy sincrono de proposito: o bot tem um unico usuario e o SQLite e local,
-entao cada operacao custa microssegundos. Trocar por aiosqlite exigiria o template
-async do Alembic e nao compraria nada aqui.
+Synchronous SQLAlchemy on purpose: the bot has a single user and SQLite is
+local, so every operation costs microseconds. Switching to aiosqlite would
+require Alembic's async template and would buy nothing here.
 """
 
 from __future__ import annotations
@@ -18,11 +18,12 @@ _engine: Engine | None = None
 _Session: sessionmaker[Session] | None = None
 
 
-def _configurar_pragmas(dbapi_conn, _record) -> None:
+def _configure_pragmas(dbapi_conn, _record) -> None:
     cur = dbapi_conn.cursor()
-    # WAL: permite backup/leitura enquanto o bot escreve.
+    # WAL: allows backup/reads while the bot writes.
     cur.execute("PRAGMA journal_mode=WAL")
-    # SQLite ignora FK por padrao; sem isso as ForeignKey do modelo sao decorativas.
+    # SQLite ignores FKs by default; without this the model's ForeignKeys are
+    # decorative.
     cur.execute("PRAGMA foreign_keys=ON")
     cur.execute("PRAGMA busy_timeout=5000")
     cur.close()
@@ -32,33 +33,33 @@ def init_engine(database_url: str) -> Engine:
     global _engine, _Session
 
     if database_url.startswith("sqlite:///"):
-        caminho = database_url.removeprefix("sqlite:///")
-        pasta = os.path.dirname(caminho)
-        if pasta:
-            os.makedirs(pasta, exist_ok=True)
+        path = database_url.removeprefix("sqlite:///")
+        folder = os.path.dirname(path)
+        if folder:
+            os.makedirs(folder, exist_ok=True)
 
     _engine = create_engine(database_url, future=True)
-    event.listen(_engine, "connect", _configurar_pragmas)
+    event.listen(_engine, "connect", _configure_pragmas)
     _Session = sessionmaker(bind=_engine, expire_on_commit=False)
     return _engine
 
 
 def get_engine() -> Engine:
     if _engine is None:
-        raise RuntimeError("init_engine() precisa ser chamado antes de get_engine()")
+        raise RuntimeError("init_engine() must be called before get_engine()")
     return _engine
 
 
 @contextmanager
 def session_scope() -> Iterator[Session]:
     if _Session is None:
-        raise RuntimeError("init_engine() precisa ser chamado antes de session_scope()")
-    sessao = _Session()
+        raise RuntimeError("init_engine() must be called before session_scope()")
+    session = _Session()
     try:
-        yield sessao
-        sessao.commit()
+        yield session
+        session.commit()
     except Exception:
-        sessao.rollback()
+        session.rollback()
         raise
     finally:
-        sessao.close()
+        session.close()

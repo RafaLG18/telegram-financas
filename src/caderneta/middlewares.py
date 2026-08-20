@@ -1,7 +1,7 @@
-"""Autorizacao.
+"""Authorization.
 
-Bot do Telegram e publico por padrao: qualquer um que descubra o @ conversa com
-ele. Este middleware e a unica coisa entre suas financas e um estranho.
+A Telegram bot is public by default: anyone who finds the @ can talk to it. This
+middleware is the only thing between your finances and a stranger.
 """
 
 from __future__ import annotations
@@ -16,10 +16,10 @@ from aiogram.types import TelegramObject, Update
 log = logging.getLogger(__name__)
 
 
-def _chat_id_do_update(update: Update) -> int | None:
-    for evento in (update.message, update.edited_message, update.channel_post):
-        if evento is not None:
-            return evento.chat.id
+def _chat_id_from_update(update: Update) -> int | None:
+    for event in (update.message, update.edited_message, update.channel_post):
+        if event is not None:
+            return event.chat.id
     if update.callback_query is not None and update.callback_query.message is not None:
         return update.callback_query.message.chat.id
     if update.callback_query is not None:
@@ -27,7 +27,7 @@ def _chat_id_do_update(update: Update) -> int | None:
     return None
 
 
-class SomenteDono(BaseMiddleware):
+class OwnerOnly(BaseMiddleware):
     def __init__(self, owner_chat_id: int | None) -> None:
         self.owner_chat_id = owner_chat_id
 
@@ -40,12 +40,12 @@ class SomenteDono(BaseMiddleware):
         if not isinstance(event, Update):
             return await handler(event, data)
 
-        chat_id = _chat_id_do_update(event)
+        chat_id = _chat_id_from_update(event)
 
-        # Modo bootstrap: sem OWNER_CHAT_ID configurado, o bot so ajuda voce a
-        # descobrir o seu id. Nao processa nenhum comando.
+        # Bootstrap mode: with no OWNER_CHAT_ID configured, the bot only helps
+        # you find your own id. It processes no commands.
         if self.owner_chat_id is None:
-            log.warning("OWNER_CHAT_ID nao configurado. chat_id recebido: %s", chat_id)
+            log.warning("OWNER_CHAT_ID not configured. chat_id received: %s", chat_id)
             if event.message is not None:
                 await event.message.answer(
                     "Bot ainda nao configurado.\n"
@@ -55,7 +55,7 @@ class SomenteDono(BaseMiddleware):
             return None
 
         if chat_id != self.owner_chat_id:
-            log.warning("acesso negado para chat_id=%s", chat_id)
+            log.warning("access denied for chat_id=%s", chat_id)
             return None
 
         data["update_id"] = event.update_id

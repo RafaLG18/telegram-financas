@@ -1,11 +1,11 @@
-"""Stub minimo da Bot API do Telegram, so para o smoke test.
+"""Minimal stub of the Telegram Bot API, just for the smoke test.
 
-Entrega um roteiro fixo de updates e registra o que o bot respondeu, para que o
-docker compose consiga provar o caminho completo:
-  update -> handler -> regra de negocio -> SQLite -> resposta
+It delivers a fixed script of updates and records what the bot replied, so that
+docker compose can prove the full path:
+  update -> handler -> business rule -> SQLite -> reply
 
-Nao e um mock de teste unitario: e um dublê de rede, usado apenas pelo profile
-`smoke` do compose. Nada disso entra na imagem de producao.
+This is not a unit-test mock: it is a network stand-in, used only by the compose
+`smoke` profile. None of it goes into the production image.
 """
 
 from __future__ import annotations
@@ -18,11 +18,11 @@ from aiohttp import web
 
 CHAT_ID = int(os.getenv("SMOKE_CHAT_ID", "12345"))
 
-USUARIO = {"id": CHAT_ID, "is_bot": False, "first_name": "Rafael"}
+USER = {"id": CHAT_ID, "is_bot": False, "first_name": "Rafael"}
 CHAT = {"id": CHAT_ID, "type": "private", "first_name": "Rafael"}
 
-# Roteiro: cada item vira um lote de getUpdates, na ordem.
-ROTEIRO: list[list[dict]] = [
+# Script: each item becomes one getUpdates batch, in order.
+SCRIPT: list[list[dict]] = [
     [
         {
             "update_id": 1001,
@@ -30,7 +30,7 @@ ROTEIRO: list[list[dict]] = [
                 "message_id": 1,
                 "date": int(time.time()),
                 "chat": CHAT,
-                "from": USUARIO,
+                "from": USER,
                 "text": "50 mercado",
             },
         }
@@ -42,20 +42,20 @@ ROTEIRO: list[list[dict]] = [
                 "message_id": 2,
                 "date": int(time.time()),
                 "chat": CHAT,
-                "from": USUARIO,
+                "from": USER,
                 "text": "+3000 salário",
             },
         }
     ],
     [
-        # Reenvio do update 1001: o bot NAO pode registrar o mercado de novo.
+        # Resend of update 1001: the bot must NOT record the groceries again.
         {
             "update_id": 1001,
             "message": {
                 "message_id": 1,
                 "date": int(time.time()),
                 "chat": CHAT,
-                "from": USUARIO,
+                "from": USER,
                 "text": "50 mercado",
             },
         }
@@ -67,25 +67,25 @@ ROTEIRO: list[list[dict]] = [
                 "message_id": 3,
                 "date": int(time.time()),
                 "chat": CHAT,
-                "from": USUARIO,
+                "from": USER,
                 "text": "/mes",
             },
         }
     ],
 ]
 
-estado = {"lote": 0, "message_id": 100}
-enviadas: list[dict] = []
+state = {"batch": 0, "message_id": 100}
+sent: list[dict] = []
 
 
 async def _handler(request: web.Request) -> web.Response:
-    metodo = request.match_info["metodo"]
+    method = request.match_info["method"]
     try:
-        corpo = await request.json()
+        body = await request.json()
     except Exception:  # noqa: BLE001
-        corpo = dict(await request.post())
+        body = dict(await request.post())
 
-    if metodo == "getMe":
+    if method == "getMe":
         return web.json_response(
             {
                 "ok": True,
@@ -98,63 +98,63 @@ async def _handler(request: web.Request) -> web.Response:
             }
         )
 
-    if metodo == "getUpdates":
-        i = estado["lote"]
-        if i < len(ROTEIRO):
-            estado["lote"] += 1
-            return web.json_response({"ok": True, "result": ROTEIRO[i]})
+    if method == "getUpdates":
+        i = state["batch"]
+        if i < len(SCRIPT):
+            state["batch"] += 1
+            return web.json_response({"ok": True, "result": SCRIPT[i]})
         return web.json_response({"ok": True, "result": []})
 
-    if metodo == "sendMessage":
-        estado["message_id"] += 1
-        texto = corpo.get("text", "")
-        enviadas.append({"chat_id": corpo.get("chat_id"), "text": texto})
-        print(f"[fake-telegram] >>> {texto}", flush=True)
+    if method == "sendMessage":
+        state["message_id"] += 1
+        text = body.get("text", "")
+        sent.append({"chat_id": body.get("chat_id"), "text": text})
+        print(f"[fake-telegram] >>> {text}", flush=True)
         return web.json_response(
             {
                 "ok": True,
                 "result": {
-                    "message_id": estado["message_id"],
+                    "message_id": state["message_id"],
                     "date": int(time.time()),
                     "chat": CHAT,
-                    "text": texto,
+                    "text": text,
                 },
             }
         )
 
-    if metodo in ("setMyCommands", "deleteWebhook", "answerCallbackQuery"):
+    if method in ("setMyCommands", "deleteWebhook", "answerCallbackQuery"):
         return web.json_response({"ok": True, "result": True})
 
-    if metodo == "editMessageText":
+    if method == "editMessageText":
         return web.json_response(
             {
                 "ok": True,
                 "result": {
-                    "message_id": corpo.get("message_id", 1),
+                    "message_id": body.get("message_id", 1),
                     "date": int(time.time()),
                     "chat": CHAT,
-                    "text": corpo.get("text", ""),
+                    "text": body.get("text", ""),
                 },
             }
         )
 
-    print(f"[fake-telegram] metodo nao implementado: {metodo}", flush=True)
+    print(f"[fake-telegram] method nao implementado: {method}", flush=True)
     return web.json_response({"ok": True, "result": True})
 
 
-async def _respostas(_req: web.Request) -> web.Response:
-    """Usado pelo smoke test para conferir o que o bot respondeu."""
+async def _replies(_req: web.Request) -> web.Response:
+    """Used by the smoke test to check what the bot replied."""
     return web.Response(
-        text=json.dumps(enviadas, ensure_ascii=False, indent=2),
+        text=json.dumps(sent, ensure_ascii=False, indent=2),
         content_type="application/json",
     )
 
 
 def main() -> None:
     app = web.Application()
-    app.router.add_route("*", "/bot{token}/{metodo}", _handler)
-    app.router.add_get("/_respostas", _respostas)
-    print("[fake-telegram] ouvindo em :8081", flush=True)
+    app.router.add_route("*", "/bot{token}/{method}", _handler)
+    app.router.add_get("/_replies", _replies)
+    print("[fake-telegram] listening on :8081", flush=True)
     web.run_app(app, host="0.0.0.0", port=8081, print=None)
 
 

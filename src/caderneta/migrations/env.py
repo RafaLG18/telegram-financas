@@ -1,9 +1,9 @@
-"""Ambiente do Alembic.
+"""Alembic environment.
 
-Dois pontos que nao sao opcionais aqui:
-- a URL vem do ambiente (DB_PATH), nunca do alembic.ini;
-- render_as_batch=True, porque o SQLite quase nao tem ALTER TABLE e o Alembic
-  precisa recriar a tabela para alterar coluna/constraint.
+Two things here are not optional:
+- the URL comes from the environment (DB_PATH), never from alembic.ini;
+- render_as_batch=True, because SQLite has almost no ALTER TABLE and Alembic
+  needs to recreate the table to change a column or constraint.
 """
 
 from __future__ import annotations
@@ -26,9 +26,9 @@ target_metadata = Base.metadata
 
 def _url() -> str:
     db_path = os.getenv("DB_PATH", "data/caderneta.db")
-    pasta = os.path.dirname(db_path)
-    if pasta:
-        os.makedirs(pasta, exist_ok=True)
+    folder = os.path.dirname(db_path)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
     return f"sqlite:///{db_path}"
 
 
@@ -45,14 +45,14 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    secao = config.get_section(config.config_ini_section, {})
-    secao["sqlalchemy.url"] = _url()
+    section = config.get_section(config.config_ini_section, {})
+    section["sqlalchemy.url"] = _url()
 
-    engine = engine_from_config(secao, prefix="sqlalchemy.", poolclass=pool.NullPool)
+    engine = engine_from_config(section, prefix="sqlalchemy.", poolclass=pool.NullPool)
 
-    with engine.connect() as conexao:
+    with engine.connect() as connection:
         context.configure(
-            connection=conexao,
+            connection=connection,
             target_metadata=target_metadata,
             render_as_batch=True,
             compare_type=True,

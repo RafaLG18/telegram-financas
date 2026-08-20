@@ -1,9 +1,11 @@
-"""Modelo de dados.
+"""Data model.
 
-Decisoes que valem lembrar:
-- valor sempre POSITIVO em centavos; o sinal vem de `tipo`.
-- `data` e a data do fato (fuso local); `criado_em` e o instante do registro (UTC).
-- `origem_update_id` e UNIQUE: e a defesa contra update reenviado pelo Telegram.
+Decisions worth remembering:
+- amount is always POSITIVE, in cents; the sign comes from `kind`.
+- `date` is when it happened (local timezone); `created_at` is when it was
+  recorded (UTC).
+- `source_update_id` is UNIQUE: that is the defense against Telegram resending
+  an update.
 """
 
 from __future__ import annotations
@@ -22,87 +24,89 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
-GASTO = "gasto"
-ENTRADA = "entrada"
-AMBOS = "ambos"
+EXPENSE = "expense"
+INCOME = "income"
+BOTH = "both"
 
 
 class Base(DeclarativeBase):
     pass
 
 
-class Categoria(Base):
-    __tablename__ = "categoria"
+class Category(Base):
+    __tablename__ = "category"
     __table_args__ = (
-        CheckConstraint("tipo IN ('gasto','entrada','ambos')", name="ck_categoria_tipo"),
+        CheckConstraint(
+            "kind IN ('expense','income','both')", name="ck_category_kind"
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    nome: Mapped[str] = mapped_column(String(40), unique=True)
-    tipo: Mapped[str] = mapped_column(String(10))
-    ativa: Mapped[bool] = mapped_column(default=True)
+    name: Mapped[str] = mapped_column(String(40), unique=True)
+    kind: Mapped[str] = mapped_column(String(10))
+    active: Mapped[bool] = mapped_column(default=True)
 
-    def aceita(self, tipo: str) -> bool:
-        return self.tipo == AMBOS or self.tipo == tipo
+    def accepts(self, kind: str) -> bool:
+        return self.kind == BOTH or self.kind == kind
 
 
-class Transacao(Base):
-    __tablename__ = "transacao"
+class Transaction(Base):
+    __tablename__ = "transaction"
     __table_args__ = (
-        CheckConstraint("tipo IN ('gasto','entrada')", name="ck_transacao_tipo"),
-        CheckConstraint("valor_centavos > 0", name="ck_transacao_valor_positivo"),
-        Index("idx_transacao_data", "data"),
+        CheckConstraint("kind IN ('expense','income')", name="ck_transaction_kind"),
+        CheckConstraint("amount_cents > 0", name="ck_transaction_amount_positive"),
+        Index("idx_transaction_date", "date"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    tipo: Mapped[str] = mapped_column(String(10))
-    valor_centavos: Mapped[int] = mapped_column(Integer)
-    data: Mapped[dt.date] = mapped_column(Date)
-    categoria_id: Mapped[int | None] = mapped_column(ForeignKey("categoria.id"))
-    # Reservado para a v2 (carteira, Nubank, ...). Nao usado ainda.
-    conta_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    descricao: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    criado_em: Mapped[dt.datetime] = mapped_column(
+    kind: Mapped[str] = mapped_column(String(10))
+    amount_cents: Mapped[int] = mapped_column(Integer)
+    date: Mapped[dt.date] = mapped_column(Date)
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("category.id"))
+    # Reserved for v2 (wallet, Nubank, ...). Not used yet.
+    account_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[dt.datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
-    origem_update_id: Mapped[int | None] = mapped_column(
+    source_update_id: Mapped[int | None] = mapped_column(
         Integer, unique=True, nullable=True
     )
 
-    categoria: Mapped[Categoria | None] = relationship(lazy="joined")
+    category: Mapped[Category | None] = relationship(lazy="joined")
 
 
-class Rascunho(Base):
-    """Lancamento em construcao pelo fluxo guiado.
+class Draft(Base):
+    """An entry being built by the guided flow.
 
-    Mora no banco (e nao em memoria) por dois motivos: sobrevive a restart e o
-    `id` curto e o que viaja no callback_data dos botoes, resolvendo o problema
-    do botao clicado dias depois.
+    It lives in the database (not in memory) for two reasons: it survives a
+    restart, and its short `id` is what travels in the buttons' callback_data,
+    which solves the problem of a button clicked days later.
     """
 
-    __tablename__ = "rascunho"
+    __tablename__ = "draft"
 
     id: Mapped[str] = mapped_column(String(12), primary_key=True)
-    estado: Mapped[str] = mapped_column(String(20))
+    state: Mapped[str] = mapped_column(String(20))
     chat_id: Mapped[int] = mapped_column(Integer)
     message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
-    tipo: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    valor_centavos: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    data: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
-    categoria_id: Mapped[int | None] = mapped_column(
-        ForeignKey("categoria.id"), nullable=True
+    kind: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    amount_cents: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    date: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    category_id: Mapped[int | None] = mapped_column(
+        ForeignKey("category.id"), nullable=True
     )
-    descricao: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
-    criado_em: Mapped[dt.datetime] = mapped_column(
+    created_at: Mapped[dt.datetime] = mapped_column(
         DateTime, server_default=func.current_timestamp()
     )
 
 
-# Estados do fluxo guiado.
-E_TIPO = "tipo"
-E_VALOR = "valor"
-E_CATEGORIA = "categoria"
-E_CONFIRMACAO = "confirmacao"
-E_DATA_LIVRE = "data_livre"
+# States of the guided flow.
+S_KIND = "kind"
+S_AMOUNT = "amount"
+S_CATEGORY = "category"
+S_CONFIRM = "confirm"
+S_FREE_DATE = "free_date"

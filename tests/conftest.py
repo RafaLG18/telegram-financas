@@ -8,7 +8,7 @@ from caderneta.models import Base
 
 
 @pytest.fixture()
-def sessao() -> Session:
+def session() -> Session:
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
     with Session(engine) as s:

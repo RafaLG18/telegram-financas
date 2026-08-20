@@ -1,60 +1,61 @@
-"""Regras de negocio.
+"""Business rules.
 
-Este pacote NAO sabe que o Telegram existe. E a fronteira que permite testar
-tudo sem subir bot e, mais pra frente, plugar outra interface (web, CLI, export).
+This package does NOT know that Telegram exists. It is the boundary that lets
+the rules be tested without starting a bot and, later on, lets another interface
+(web, CLI, export) be plugged in.
 
-Dividido por dominio: `categorias`, `transacoes`, `relatorios` e `rascunhos`.
-A API publica e re-exportada aqui, entao `from ..core import resumo` continua
-valendo — importar do modulo especifico e opcional, nao obrigatorio.
+Split by domain: `categories`, `transactions`, `reports` and `drafts`. The public
+API is re-exported here, so `from ..core import summary` keeps working -
+importing from the specific module is optional, not mandatory.
 """
 
 from __future__ import annotations
 
-from .categorias import (
-    CATEGORIAS_PADRAO,
-    achar_categoria_por_nome,
-    listar_categorias,
-    seed_categorias,
+from .categories import (
+    DEFAULT_CATEGORIES,
+    find_category_by_name,
+    list_categories,
+    seed_categories,
 )
-from .rascunhos import (
-    concluir_rascunho,
-    descartar_rascunho,
-    limpar_rascunhos_do_chat,
-    limpar_rascunhos_velhos,
-    novo_rascunho,
-    pegar_rascunho,
-    rascunho_ativo,
+from .drafts import (
+    active_draft,
+    clear_chat_drafts,
+    discard_draft,
+    finish_draft,
+    get_draft,
+    new_draft,
+    purge_old_drafts,
 )
-from .relatorios import LinhaCategoria, Resumo, intervalo_do_mes, resumo
-from .transacoes import (
-    TransacaoRemovida,
-    ValorInvalidoError,
-    desfazer_ultima,
-    registrar_transacao,
-    remover_transacao,
-    ultima_transacao,
+from .reports import CategoryLine, Summary, month_range, summary
+from .transactions import (
+    InvalidAmountError,
+    RemovedTransaction,
+    delete_transaction,
+    last_transaction,
+    record_transaction,
+    undo_last,
 )
 
 __all__ = [
-    "CATEGORIAS_PADRAO",
-    "LinhaCategoria",
-    "Resumo",
-    "TransacaoRemovida",
-    "ValorInvalidoError",
-    "achar_categoria_por_nome",
-    "concluir_rascunho",
-    "descartar_rascunho",
-    "desfazer_ultima",
-    "intervalo_do_mes",
-    "limpar_rascunhos_do_chat",
-    "limpar_rascunhos_velhos",
-    "listar_categorias",
-    "novo_rascunho",
-    "pegar_rascunho",
-    "rascunho_ativo",
-    "registrar_transacao",
-    "remover_transacao",
-    "resumo",
-    "seed_categorias",
-    "ultima_transacao",
+    "DEFAULT_CATEGORIES",
+    "CategoryLine",
+    "InvalidAmountError",
+    "RemovedTransaction",
+    "Summary",
+    "active_draft",
+    "clear_chat_drafts",
+    "delete_transaction",
+    "discard_draft",
+    "find_category_by_name",
+    "finish_draft",
+    "get_draft",
+    "last_transaction",
+    "list_categories",
+    "month_range",
+    "new_draft",
+    "purge_old_drafts",
+    "record_transaction",
+    "seed_categories",
+    "summary",
+    "undo_last",
 ]

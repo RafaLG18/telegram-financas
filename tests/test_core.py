@@ -6,128 +6,128 @@ import pytest
 from sqlalchemy.orm import Session
 
 from caderneta.core import (
-    CATEGORIAS_PADRAO,
-    ValorInvalidoError,
-    achar_categoria_por_nome,
-    desfazer_ultima,
-    intervalo_do_mes,
-    listar_categorias,
-    registrar_transacao,
-    resumo,
-    seed_categorias,
+    DEFAULT_CATEGORIES,
+    InvalidAmountError,
+    find_category_by_name,
+    list_categories,
+    month_range,
+    record_transaction,
+    seed_categories,
+    summary,
+    undo_last,
 )
-from caderneta.models import ENTRADA, GASTO
+from caderneta.models import EXPENSE, INCOME
 
-HOJE = dt.date(2026, 8, 18)
-
-
-def test_seed_e_idempotente(sessao: Session) -> None:
-    assert seed_categorias(sessao) == len(CATEGORIAS_PADRAO)
-    assert seed_categorias(sessao) == 0
-    assert len(listar_categorias(sessao)) == len(CATEGORIAS_PADRAO)
+TODAY = dt.date(2026, 8, 18)
 
 
-def test_listar_categorias_filtra_por_tipo(sessao: Session) -> None:
-    seed_categorias(sessao)
-    nomes = {c.nome for c in listar_categorias(sessao, tipo=ENTRADA)}
-    assert "Salário" in nomes
-    assert "Mercado" not in nomes
-    # 'Outros' e tipo AMBOS: aparece nos dois.
-    assert "Outros" in nomes
+def test_seed_is_idempotent(session: Session) -> None:
+    assert seed_categories(session) == len(DEFAULT_CATEGORIES)
+    assert seed_categories(session) == 0
+    assert len(list_categories(session)) == len(DEFAULT_CATEGORIES)
 
 
-def test_achar_categoria_por_prefixo(sessao: Session) -> None:
-    seed_categorias(sessao)
-    assert achar_categoria_por_nome(sessao, "merc").nome == "Mercado"
-    assert achar_categoria_por_nome(sessao, "MERCADO").nome == "Mercado"
-    assert achar_categoria_por_nome(sessao, "xyz") is None
+def test_list_categories_filters_by_kind(session: Session) -> None:
+    seed_categories(session)
+    names = {c.name for c in list_categories(session, kind=INCOME)}
+    assert "Salário" in names
+    assert "Mercado" not in names
+    # 'Outros' is kind BOTH: it shows up in both.
+    assert "Outros" in names
 
 
-def test_prefixo_ambiguo_nao_chuta(sessao: Session) -> None:
-    seed_categorias(sessao)
-    # "Salário" e "Saúde" comecam com "sa": ambiguo, melhor nao adivinhar.
-    assert achar_categoria_por_nome(sessao, "sa") is None
+def test_find_category_by_prefix(session: Session) -> None:
+    seed_categories(session)
+    assert find_category_by_name(session, "merc").name == "Mercado"
+    assert find_category_by_name(session, "MERCADO").name == "Mercado"
+    assert find_category_by_name(session, "xyz") is None
 
 
-def test_registrar_transacao(sessao: Session) -> None:
-    t, criada = registrar_transacao(
-        sessao, tipo=GASTO, valor_centavos=5000, data=HOJE, descricao="pão"
+def test_ambiguous_prefix_does_not_guess(session: Session) -> None:
+    seed_categories(session)
+    # "Salário" and "Saúde" both start with "sa": ambiguous, better not to guess.
+    assert find_category_by_name(session, "sa") is None
+
+
+def test_record_transaction(session: Session) -> None:
+    t, created = record_transaction(
+        session, kind=EXPENSE, amount_cents=5000, date=TODAY, description="pão"
     )
-    assert criada is True
+    assert created is True
     assert t.id is not None
-    assert t.valor_centavos == 5000
+    assert t.amount_cents == 5000
 
 
-def test_valor_zero_ou_negativo_e_rejeitado(sessao: Session) -> None:
-    with pytest.raises(ValorInvalidoError):
-        registrar_transacao(sessao, tipo=GASTO, valor_centavos=0, data=HOJE)
-    with pytest.raises(ValorInvalidoError):
-        registrar_transacao(sessao, tipo=GASTO, valor_centavos=-1, data=HOJE)
+def test_zero_or_negative_amount_is_rejected(session: Session) -> None:
+    with pytest.raises(InvalidAmountError):
+        record_transaction(session, kind=EXPENSE, amount_cents=0, date=TODAY)
+    with pytest.raises(InvalidAmountError):
+        record_transaction(session, kind=EXPENSE, amount_cents=-1, date=TODAY)
 
 
-def test_mesmo_update_id_nao_duplica(sessao: Session) -> None:
-    """Telegram reenvia updates. Sem isso, um gasto vira dois."""
-    primeira, criada1 = registrar_transacao(
-        sessao, tipo=GASTO, valor_centavos=5000, data=HOJE, origem_update_id=999
+def test_same_update_id_does_not_duplicate(session: Session) -> None:
+    """Telegram resends updates. Without this, one expense becomes two."""
+    first, created1 = record_transaction(
+        session, kind=EXPENSE, amount_cents=5000, date=TODAY, source_update_id=999
     )
-    segunda, criada2 = registrar_transacao(
-        sessao, tipo=GASTO, valor_centavos=5000, data=HOJE, origem_update_id=999
+    second, created2 = record_transaction(
+        session, kind=EXPENSE, amount_cents=5000, date=TODAY, source_update_id=999
     )
-    assert criada1 is True
-    assert criada2 is False
-    assert primeira.id == segunda.id
-    assert resumo(sessao, HOJE, HOJE).total_gasto == 5000
+    assert created1 is True
+    assert created2 is False
+    assert first.id == second.id
+    assert summary(session, TODAY, TODAY).total_expense == 5000
 
 
-def test_update_id_nulo_nao_bloqueia_repetidos(sessao: Session) -> None:
-    # Dois cafés de R$ 5 no mesmo dia sao dois lancamentos legitimos.
-    registrar_transacao(sessao, tipo=GASTO, valor_centavos=500, data=HOJE)
-    registrar_transacao(sessao, tipo=GASTO, valor_centavos=500, data=HOJE)
-    assert resumo(sessao, HOJE, HOJE).total_gasto == 1000
+def test_null_update_id_does_not_block_repeats(session: Session) -> None:
+    # Two R$ 5 coffees on the same day are two legitimate entries.
+    record_transaction(session, kind=EXPENSE, amount_cents=500, date=TODAY)
+    record_transaction(session, kind=EXPENSE, amount_cents=500, date=TODAY)
+    assert summary(session, TODAY, TODAY).total_expense == 1000
 
 
-def test_resumo_saldo_e_categorias(sessao: Session) -> None:
-    seed_categorias(sessao)
-    mercado = achar_categoria_por_nome(sessao, "Mercado")
-    salario = achar_categoria_por_nome(sessao, "Salário")
+def test_summary_balance_and_categories(session: Session) -> None:
+    seed_categories(session)
+    market = find_category_by_name(session, "Mercado")
+    salary = find_category_by_name(session, "Salário")
 
-    registrar_transacao(
-        sessao, tipo=ENTRADA, valor_centavos=300000, data=HOJE,
-        categoria_id=salario.id,
+    record_transaction(
+        session, kind=INCOME, amount_cents=300000, date=TODAY,
+        category_id=salary.id,
     )
-    registrar_transacao(
-        sessao, tipo=GASTO, valor_centavos=5000, data=HOJE, categoria_id=mercado.id
+    record_transaction(
+        session, kind=EXPENSE, amount_cents=5000, date=TODAY, category_id=market.id
     )
-    registrar_transacao(
-        sessao, tipo=GASTO, valor_centavos=2500, data=HOJE, categoria_id=mercado.id
+    record_transaction(
+        session, kind=EXPENSE, amount_cents=2500, date=TODAY, category_id=market.id
     )
 
-    r = resumo(sessao, HOJE, HOJE)
-    assert r.total_entrada == 300000
-    assert r.total_gasto == 7500
-    assert r.saldo == 292500
-    assert len(r.gastos_por_categoria) == 1
-    assert r.gastos_por_categoria[0].nome == "Mercado"
-    assert r.gastos_por_categoria[0].quantidade == 2
+    s = summary(session, TODAY, TODAY)
+    assert s.total_income == 300000
+    assert s.total_expense == 7500
+    assert s.balance == 292500
+    assert len(s.expenses_by_category) == 1
+    assert s.expenses_by_category[0].name == "Mercado"
+    assert s.expenses_by_category[0].count == 2
 
 
-def test_resumo_respeita_o_intervalo(sessao: Session) -> None:
-    registrar_transacao(sessao, tipo=GASTO, valor_centavos=1000, data=HOJE)
-    registrar_transacao(
-        sessao, tipo=GASTO, valor_centavos=9999, data=dt.date(2026, 7, 31)
+def test_summary_respects_the_range(session: Session) -> None:
+    record_transaction(session, kind=EXPENSE, amount_cents=1000, date=TODAY)
+    record_transaction(
+        session, kind=EXPENSE, amount_cents=9999, date=dt.date(2026, 7, 31)
     )
-    inicio, fim = intervalo_do_mes(HOJE)
-    assert resumo(sessao, inicio, fim).total_gasto == 1000
+    start, end = month_range(TODAY)
+    assert summary(session, start, end).total_expense == 1000
 
 
-def test_resumo_vazio(sessao: Session) -> None:
-    r = resumo(sessao, HOJE, HOJE)
-    assert r.vazio is True
-    assert r.saldo == 0
+def test_empty_summary(session: Session) -> None:
+    s = summary(session, TODAY, TODAY)
+    assert s.empty is True
+    assert s.balance == 0
 
 
 @pytest.mark.parametrize(
-    ("dia", "esperado"),
+    ("day", "expected"),
     [
         (dt.date(2026, 8, 18), (dt.date(2026, 8, 1), dt.date(2026, 8, 31))),
         (dt.date(2026, 2, 10), (dt.date(2026, 2, 1), dt.date(2026, 2, 28))),
@@ -135,24 +135,24 @@ def test_resumo_vazio(sessao: Session) -> None:
         (dt.date(2026, 12, 5), (dt.date(2026, 12, 1), dt.date(2026, 12, 31))),
     ],
 )
-def test_intervalo_do_mes(dia: dt.date, esperado: tuple[dt.date, dt.date]) -> None:
-    assert intervalo_do_mes(dia) == esperado
+def test_month_range(day: dt.date, expected: tuple[dt.date, dt.date]) -> None:
+    assert month_range(day) == expected
 
 
-def test_desfazer_remove_o_ultimo(sessao: Session) -> None:
-    seed_categorias(sessao)
-    mercado = achar_categoria_por_nome(sessao, "Mercado")
-    registrar_transacao(sessao, tipo=GASTO, valor_centavos=1000, data=HOJE)
-    registrar_transacao(
-        sessao, tipo=GASTO, valor_centavos=2000, data=HOJE, categoria_id=mercado.id
+def test_undo_removes_the_last_one(session: Session) -> None:
+    seed_categories(session)
+    market = find_category_by_name(session, "Mercado")
+    record_transaction(session, kind=EXPENSE, amount_cents=1000, date=TODAY)
+    record_transaction(
+        session, kind=EXPENSE, amount_cents=2000, date=TODAY, category_id=market.id
     )
 
-    removida = desfazer_ultima(sessao)
-    assert removida is not None
-    assert removida.valor_centavos == 2000
-    assert removida.categoria == "Mercado"
-    assert resumo(sessao, HOJE, HOJE).total_gasto == 1000
+    removed = undo_last(session)
+    assert removed is not None
+    assert removed.amount_cents == 2000
+    assert removed.category == "Mercado"
+    assert summary(session, TODAY, TODAY).total_expense == 1000
 
 
-def test_desfazer_sem_nada(sessao: Session) -> None:
-    assert desfazer_ultima(sessao) is None
+def test_undo_with_nothing(session: Session) -> None:
+    assert undo_last(session) is None
