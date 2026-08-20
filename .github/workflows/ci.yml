@@ -16,7 +16,7 @@ env:
 
 jobs:
   qualidade:
-    name: Testes e lint do chart
+    name: Tests and chart lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -28,29 +28,29 @@ jobs:
       - run: uv sync --frozen
       - run: uv run pytest -q
 
-      # O chart resolve `image.tag: ""` para v<appVersion>, e o CI so publica
-      # essa tag a partir de um git tag v*. Se as duas versoes divergirem, o
-      # default do chart aponta pra uma imagem que nao existe — foi assim que
-      # o primeiro deploy quebrou com ImagePullBackOff.
-      - name: Tag v* bate com o appVersion do chart
+      # The chart resolves `image.tag: ""` to v<appVersion>, and CI only
+      # publishes that tag from a git tag v*. If the two versions diverge, the
+      # chart default points at an image that does not exist - that is how the
+      # first deploy broke with ImagePullBackOff.
+      - name: Tag v* matches the chart appVersion
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           tag="${GITHUB_REF_NAME#v}"
           app="$(grep '^appVersion:' helm/caderneta/Chart.yaml | cut -d: -f2 | tr -d ' "')"
           if [ "$tag" != "$app" ]; then
-            echo "::error::git tag $GITHUB_REF_NAME nao bate com appVersion $app do Chart.yaml"
+            echo "::error::git tag $GITHUB_REF_NAME does not match appVersion $app from Chart.yaml"
             exit 1
           fi
           echo "tag $GITHUB_REF_NAME == appVersion $app"
 
       - uses: azure/setup-helm@v5
       - run: helm lint helm/caderneta --set telegram.botToken=fake
-      # Renderiza com a mesma combinacao que o deploy.sh usa: as guardas do
-      # chart falham no template, entao isto pega o erro aqui e nao no cluster.
+      # Renders with the same combination deploy.sh uses: the chart guards fail
+      # at template time, so this catches the error here and not in the cluster.
       - run: helm template caderneta helm/caderneta --set telegram.existingSecret=caderneta-token
 
   imagem:
-    name: Build, scan e smoke
+    name: Build, scan and smoke
     runs-on: ubuntu-latest
     needs: qualidade
     permissions:
@@ -59,13 +59,14 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Emulacao para buildar arm64 num runner amd64.
+      # Emulation to build arm64 on an amd64 runner.
       - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v4
 
-      # Build nativo amd64, so pro scan e pro smoke: `load` nao aceita imagem
-      # multi-plataforma, e rodar os testes sob QEMU seria lento sem ganho.
+      # Native amd64 build, only for the scan and the smoke test: `load` does
+      # not accept a multi-platform image, and running the tests under QEMU would
+      # be slow for no gain.
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -74,7 +75,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Trivy (HIGH/CRITICAL com correcao disponivel)
+      - name: Trivy (HIGH/CRITICAL with a fix available)
         run: docker compose --profile scan run --rm trivy
 
       - name: Smoke test end-to-end
@@ -87,19 +88,19 @@ jobs:
           sleep 5
           curl -s http://127.0.0.1:8081/_replies | python3 -m json.tool
 
-      - name: Logs do smoke (so quando falha)
+      - name: Smoke logs (only on failure)
         if: failure()
         run: docker compose --profile smoke logs
 
-      - name: Derruba o smoke
+      - name: Tear down the smoke stack
         if: always()
         run: docker compose --profile smoke down -v
 
       # --------------------------------------------------------------------
-      # Publicacao: so no main e em tag. PR nao publica — nao ha por que gastar
-      # espaco no registry com imagem de branch que pode nem virar merge.
+      # Publishing: only on main and on tags. PRs do not publish - no reason to
+      # spend registry space on a branch image that may never be merged.
       # --------------------------------------------------------------------
-      - name: Login no GHCR
+      - name: Log in to GHCR
         if: github.event_name == 'push'
         uses: docker/login-action@v4
         with:
@@ -107,7 +108,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Tags da imagem
+      - name: Image tags
         if: github.event_name == 'push'
         id: meta
         uses: docker/metadata-action@v6
@@ -120,12 +121,12 @@ jobs:
             type=sha,format=long
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # Reusa o cache do build acima: nao recompila, so empurra.
-      # Multi-plataforma: o node do cluster pode ser arm64 (o pull falha com
-      # "no match for platform in manifest" se a imagem for so amd64).
-      # provenance: false mantem o indice limpo — o manifesto de atestacao
-      # aparece como plataforma "unknown/unknown" e confunde runtime antigo.
-      - name: Publica no GHCR
+      # Reuses the cache from the build above: no recompile, just a push.
+      # Multi-platform: the cluster node may be arm64 (the pull fails with
+      # "no match for platform in manifest" if the image is amd64 only).
+      # provenance: false keeps the index clean - the attestation manifest shows
+      # up as platform "unknown/unknown" and confuses older runtimes.
+      - name: Push to GHCR
         if: github.event_name == 'push'
         uses: docker/build-push-action@v7
         with:

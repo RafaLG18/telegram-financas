@@ -1,41 +1,42 @@
 #!/usr/bin/env bash
-# Backup do banco. Usa `sqlite3 .backup` em vez de `cp`: copiar o arquivo com o
-# bot escrevendo pode gerar um .db corrompido, o .backup faz copia consistente.
+# Database backup. Uses `sqlite3 .backup` instead of `cp`: copying the file
+# while the bot writes can produce a corrupt .db, while .backup makes a
+# consistent copy.
 #
-# Cron diario as 3h:
-#   0 3 * * * /caminho/scripts/backup.sh >> /var/log/caderneta-backup.log 2>&1
+# Daily cron at 3am:
+#   0 3 * * * /path/to/scripts/backup.sh >> /var/log/caderneta-backup.log 2>&1
 set -euo pipefail
 
 CONTAINER="${CONTAINER:-caderneta-bot}"
-DESTINO="${DESTINO:-$HOME/backups/caderneta}"
-MANTER_DIAS="${MANTER_DIAS:-30}"
+DESTINATION="${DESTINATION:-${DESTINO:-$HOME/backups/caderneta}}"
+KEEP_DAYS="${KEEP_DAYS:-${MANTER_DIAS:-30}}"
 DB_PATH="${DB_PATH:-/data/caderneta.db}"
 
-mkdir -p "$DESTINO"
-carimbo="$(date +%Y%m%d-%H%M%S)"
-arquivo="$DESTINO/caderneta-$carimbo.db"
+mkdir -p "$DESTINATION"
+stamp="$(date +%Y%m%d-%H%M%S)"
+file="$DESTINATION/caderneta-$stamp.db"
 
-echo "[backup] copiando de $CONTAINER:$DB_PATH"
+echo "[backup] copying from $CONTAINER:$DB_PATH"
 docker exec "$CONTAINER" python -c "
 import sqlite3, sys
-origem = sqlite3.connect(sys.argv[1])
-destino = sqlite3.connect('/tmp/backup.db')
-with destino:
-    origem.backup(destino)
-destino.close(); origem.close()
+source = sqlite3.connect(sys.argv[1])
+target = sqlite3.connect('/tmp/backup.db')
+with target:
+    source.backup(target)
+target.close(); source.close()
 " "$DB_PATH"
 
-docker cp "$CONTAINER:/tmp/backup.db" "$arquivo"
+docker cp "$CONTAINER:/tmp/backup.db" "$file"
 docker exec "$CONTAINER" rm -f /tmp/backup.db
 
-gzip -f "$arquivo"
-echo "[backup] gerado: $arquivo.gz ($(du -h "$arquivo.gz" | cut -f1))"
+gzip -f "$file"
+echo "[backup] created: $file.gz ($(du -h "$file.gz" | cut -f1))"
 
-# Verificacao: backup que nao abre nao e backup.
-if ! zcat "$arquivo.gz" | head -c 16 | grep -q "SQLite format 3"; then
-    echo "[backup] ERRO: arquivo gerado nao parece um banco SQLite" >&2
+# Verification: a backup that does not open is not a backup.
+if ! zcat "$file.gz" | head -c 16 | grep -q "SQLite format 3"; then
+    echo "[backup] ERROR: the generated file does not look like a SQLite database" >&2
     exit 1
 fi
 
-apagados=$(find "$DESTINO" -name 'caderneta-*.db.gz' -mtime +"$MANTER_DIAS" -print -delete | wc -l)
-echo "[backup] ok. backups antigos removidos: $apagados"
+deleted=$(find "$DESTINATION" -name 'caderneta-*.db.gz' -mtime +"$KEEP_DAYS" -print -delete | wc -l)
+echo "[backup] ok. old backups removed: $deleted"

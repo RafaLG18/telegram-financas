@@ -36,7 +36,8 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end -}}
 
 {{/*
-Nome do Secret com o token: o existente, se informado, senao o que o chart cria.
+Name of the token Secret: the existing one when given, otherwise the one the
+chart creates.
 */}}
 {{- define "caderneta.secretName" -}}
 {{- if .Values.telegram.existingSecret -}}
@@ -63,16 +64,16 @@ BOT_TOKEN
 {{- end -}}
 
 {{/*
-Guardas que falham no `helm template`, antes de qualquer coisa chegar no cluster.
+Guards that fail during `helm template`, before anything reaches the cluster.
 */}}
 {{- define "caderneta.validate" -}}
 {{- if gt (int .Values.replicaCount) 1 -}}
-{{- fail "replicaCount precisa ser 1: um bot em polling com duas replicas gera 409 Conflict no getUpdates, e o SQLite nao suporta dois escritores." -}}
+{{- fail "replicaCount must be 1: a polling bot with two replicas causes a 409 Conflict on getUpdates, and SQLite does not support two writers." -}}
 {{- end -}}
 {{- if and (not .Values.telegram.existingSecret) (not .Values.telegram.botToken) -}}
-{{- fail "Informe telegram.existingSecret (recomendado) ou telegram.botToken." -}}
+{{- fail "Set telegram.existingSecret (recommended) or telegram.botToken." -}}
 {{- end -}}
 {{- if and .Values.persistence.enabled (not (eq .Values.persistence.accessMode "ReadWriteOnce")) -}}
-{{- fail "persistence.accessMode precisa ser ReadWriteOnce: SQLite e um arquivo com um unico escritor." -}}
+{{- fail "persistence.accessMode must be ReadWriteOnce: SQLite is a file with a single writer." -}}
 {{- end -}}
 {{- end -}}

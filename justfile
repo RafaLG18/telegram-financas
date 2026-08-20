@@ -1,77 +1,77 @@
 image := "caderneta:local"
 chart := "helm/caderneta"
 
-# Lista as receitas disponiveis
+# List the available recipes
 default:
     @just --list
 
-# Instala dependencias com uv
+# Install dependencies with uv
 setup:
     uv sync
 
-# Roda os testes
+# Run the tests
 test:
     uv run pytest -q
 
-# Builda a imagem
+# Build the image
 build:
     docker build -t {{ image }} .
 
-# Scan de vulnerabilidades (falha se houver HIGH/CRITICAL com correcao disponivel)
+# Vulnerability scan (fails on HIGH/CRITICAL with a fix available)
 scan: build
     docker compose --profile scan run --rm trivy
 
-# Sobe o bot contra uma Bot API falsa e valida o fluxo ponta a ponta
+# Run the bot against a fake Bot API and validate the flow end to end
 smoke: build
     docker compose --profile smoke up -d
     sleep 10
-    @echo "--- respostas do bot ---"
+    @echo "--- bot replies ---"
     curl -s http://127.0.0.1:8081/_replies | python3 -m json.tool
 
-# Derruba o ambiente de smoke test (inclusive o volume)
+# Tear down the smoke test environment (volume included)
 smoke-down:
     docker compose --profile smoke down -v
 
-# Sobe o bot de verdade (exige .env preenchido)
+# Start the real bot (requires a filled .env)
 up:
     docker compose up -d bot
 
-# Derruba o bot
+# Stop the bot
 down:
     docker compose down
 
-# Acompanha os logs
+# Follow the logs
 logs:
     docker compose logs -f bot
 
-# Gera migracao a partir dos models: just migration "adiciona conta"
-migration mensagem:
-    DB_PATH=data/caderneta.db uv run alembic revision --autogenerate -m "{{ mensagem }}"
+# Generate a migration from the models: just migration "add account"
+migration message:
+    DB_PATH=data/caderneta.db uv run alembic revision --autogenerate -m "{{ message }}"
 
-# Aplica as migracoes localmente
+# Apply the migrations locally
 migrate:
     DB_PATH=data/caderneta.db uv run alembic upgrade head
 
-# Lint do chart
+# Lint the chart
 helm-lint:
     helm lint {{ chart }} --set telegram.botToken=fake
 
-# Renderiza o chart
+# Render the chart
 helm-render:
     helm template caderneta {{ chart }} --set telegram.existingSecret=caderneta-token
 
-# Deploy no k8s lendo o .env (helm upgrade --install)
+# Deploy to k8s reading the .env (helm upgrade --install)
 deploy *args:
     ./scripts/deploy.sh {{ args }}
 
-# Valida o deploy sem tocar no cluster
+# Validate the deploy without touching the cluster
 deploy-dry:
     ./scripts/deploy.sh --dry-run
 
-# Verificacao completa: testes + build + scan + smoke
+# Full verification: tests + build + scan + smoke
 check: test scan smoke
 
-# Remove artefatos locais
+# Remove local artifacts
 clean:
     rm -rf .pytest_cache data/caderneta.db
     find . -name __pycache__ -type d -prune -exec rm -rf {} +

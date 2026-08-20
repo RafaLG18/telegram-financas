@@ -7,8 +7,8 @@ metadata:
     {{- include "caderneta.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
-  # Recreate, nao RollingUpdate: o PVC e ReadWriteOnce e dois pods em polling
-  # brigariam pelo getUpdates durante o rollout.
+  # Recreate, not RollingUpdate: the PVC is ReadWriteOnce and two polling pods
+  # would fight over getUpdates during the rollout.
   strategy:
     type: Recreate
   selector:
@@ -17,7 +17,7 @@ spec:
   template:
     metadata:
       annotations:
-        # Reinicia o pod quando o ConfigMap muda.
+        # Restarts the pod when the ConfigMap changes.
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -69,7 +69,7 @@ spec:
           volumeMounts:
             - name: dados
               mountPath: {{ dir .Values.config.dbPath }}
-            # readOnlyRootFilesystem: tudo que precisa escrever ganha volume proprio.
+            # readOnlyRootFilesystem: anything that needs to write gets its own volume.
             - name: tmp
               mountPath: /tmp
       volumes:

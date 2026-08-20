@@ -9,8 +9,8 @@ services:
     container_name: caderneta-bot
     restart: unless-stopped
     env_file:
-      # Opcional para que os profiles `scan` e `smoke` rodem antes de existir
-      # um .env. Sem ele, o servico `bot` sobe e para com erro explicito.
+      # Optional so the `scan` and `smoke` profiles can run before a .env
+      # exists. Without it, the `bot` service starts and stops with a clear error.
       - path: .env
         required: false
     environment:
@@ -19,9 +19,9 @@ services:
     volumes:
       - caderneta-data:/data
     ports:
-      # So no loopback: o health nao precisa ficar exposto na rede.
+      # Loopback only: health does not need to be exposed on the network.
       - "127.0.0.1:8080:8080"
-    # O container so escreve em /data; o resto do filesystem pode ser read-only.
+    # The container only writes to /data; the rest of the filesystem can be read-only.
     read_only: true
     tmpfs:
       - /tmp
@@ -45,7 +45,7 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # Scan de vulnerabilidades. Nao sobe no `up` — roda com:
+  # Vulnerability scan. Does not start on `up` - run it with:
   #   docker compose --profile scan run --rm trivy
   trivy:
     image: aquasec/trivy:0.74.0
@@ -66,7 +66,7 @@ services:
       - caderneta:local
 
   # ---------------------------------------------------------------------
-  # Smoke test end-to-end, sem tocar no Telegram real. Roda com:
+  # End-to-end smoke test, without touching the real Telegram. Run it with:
   #   docker compose --profile smoke up --abort-on-container-exit
   # ---------------------------------------------------------------------
   fake-telegram:
@@ -78,7 +78,7 @@ services:
       - ./scripts/fake_telegram.py:/app/scripts/fake_telegram.py:ro
     ports:
       - "127.0.0.1:8081:8081"
-    # Herdaria o HEALTHCHECK da imagem, que aponta pra outra porta.
+    # It would inherit the image's HEALTHCHECK, which points at another port.
     healthcheck:
       disable: true
 
