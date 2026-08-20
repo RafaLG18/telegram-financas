@@ -5,8 +5,12 @@ import datetime as dt
 import pytest
 
 from caderneta.parse import (
+    DATA_FUTURA,
+    DATA_NAO_ENTENDI,
+    DATA_OK,
     formata_valor,
     parse_data,
+    parse_data_estrita,
     parse_lancamento,
     parse_valor,
 )
@@ -115,3 +119,52 @@ def test_parse_lancamento_sem_valor() -> None:
 )
 def test_formata_valor(centavos: int, esperado: str) -> None:
     assert formata_valor(centavos) == esperado
+
+
+@pytest.mark.parametrize(
+    ("texto", "esperada"),
+    [
+        ("15/08", dt.date(2026, 8, 15)),
+        ("15/08/2025", dt.date(2025, 8, 15)),
+        ("15/08/25", dt.date(2025, 8, 15)),
+        ("  15/8  ", dt.date(2026, 8, 15)),
+        ("ontem", dt.date(2026, 8, 17)),
+        ("anteontem", dt.date(2026, 8, 16)),
+        ("hoje", HOJE),
+    ],
+)
+def test_parse_data_estrita_aceita(texto: str, esperada: dt.date) -> None:
+    lida = parse_data_estrita(texto, HOJE)
+    assert lida.motivo == DATA_OK
+    assert lida.data == esperada
+
+
+def test_parse_data_estrita_vira_o_ano() -> None:
+    # 31/12 digitado em janeiro e do ano passado, nao daqui a 11 meses.
+    lida = parse_data_estrita("31/12", dt.date(2026, 1, 5))
+    assert lida.data == dt.date(2025, 12, 31)
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "mercado",
+        "",
+        "   ",
+        "30/02",
+        "45/13",
+        "15/08 mercado",  # sobra de texto: aqui a mensagem inteira e a data
+        "50",
+    ],
+)
+def test_parse_data_estrita_nao_e_data(texto: str) -> None:
+    lida = parse_data_estrita(texto, HOJE)
+    assert lida.motivo == DATA_NAO_ENTENDI
+    assert lida.data is None
+
+
+@pytest.mark.parametrize("texto", ["19/08", "01/09", "15/08/2027"])
+def test_parse_data_estrita_recusa_futuro(texto: str) -> None:
+    lida = parse_data_estrita(texto, HOJE)
+    assert lida.motivo == DATA_FUTURA
+    assert lida.data is None

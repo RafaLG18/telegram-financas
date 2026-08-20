@@ -6,7 +6,7 @@ import datetime as dt
 
 from .core import Resumo, TransacaoRemovida
 from .models import ENTRADA, GASTO, Rascunho, Transacao
-from .parse import formata_valor
+from .parse import DIAS_DATA_ANTIGA, formata_valor
 
 _ICONE = {GASTO: "🔴", ENTRADA: "🟢"}
 _ROTULO = {GASTO: "Gasto", ENTRADA: "Entrada"}
@@ -62,9 +62,15 @@ def transacao_removida(t: TransacaoRemovida, hoje: dt.date) -> str:
 
 def previa_rascunho(r: Rascunho, categoria: str | None, hoje: dt.date) -> str:
     assert r.tipo is not None and r.valor_centavos is not None
-    return "Confere?\n\n" + linha_transacao(
-        r.tipo, r.valor_centavos, r.data or hoje, categoria, r.descricao, hoje
+    data = r.data or hoje
+    texto = "Confere?\n\n" + linha_transacao(
+        r.tipo, r.valor_centavos, data, categoria, r.descricao, hoje
     )
+    # A previa ja e a confirmacao: em vez de uma pergunta extra, data muito
+    # antiga sai marcada aqui — errar o ano digitando e facil.
+    if (hoje - data).days > DIAS_DATA_ANTIGA:
+        texto += "\n\n⚠️ <i>Essa data é de mais de 2 anos atrás. Confere o ano?</i>"
+    return texto
 
 
 def render_resumo(r: Resumo, titulo: str) -> str:
@@ -97,7 +103,7 @@ def render_resumo(r: Resumo, titulo: str) -> str:
 AJUDA = """<b>Caderneta</b> — controle financeiro
 
 <b>Registrar</b>
-/registrar — fluxo guiado com botões
+/registrar — fluxo guiado com botões (dá para escolher qualquer data)
 Ou mande direto: <code>50 mercado</code>, <code>1.250,00 aluguel ontem</code>
 
 <b>Consultar</b>

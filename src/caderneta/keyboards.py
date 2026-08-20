@@ -17,6 +17,7 @@ CB_DATA = "data"
 CB_CONFIRMA = "ok"
 CB_CANCELA = "no"
 CB_MUDAR_DATA = "dt?"
+CB_DATA_LIVRE = "dtl"
 CB_DESFAZER = "undo"
 
 
@@ -53,8 +54,9 @@ def teclado_datas(rascunho_id: str) -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     for rotulo, dias in (("Hoje", 0), ("Ontem", 1), ("Anteontem", 2)):
         b.button(text=rotulo, callback_data=f"{CB_DATA}:{rascunho_id}:{dias}")
+    b.button(text="📅 Outra data", callback_data=f"{CB_DATA_LIVRE}:{rascunho_id}")
     b.button(text="✖️ Cancelar", callback_data=f"{CB_CANCELA}:{rascunho_id}")
-    b.adjust(3, 1)
+    b.adjust(3, 1, 1)
     return b.as_markup()
 
 
