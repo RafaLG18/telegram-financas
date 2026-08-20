@@ -28,7 +28,7 @@ jobs:
       - run: uv sync --frozen
       - run: uv run pytest -q
 
-      # O chart resolve `image.tag: ""` para o appVersion, e o CI so publica
+      # O chart resolve `image.tag: ""` para v<appVersion>, e o CI so publica
       # essa tag a partir de um git tag v*. Se as duas versoes divergirem, o
       # default do chart aponta pra uma imagem que nao existe — foi assim que
       # o primeiro deploy quebrou com ImagePullBackOff.
@@ -115,8 +115,8 @@ jobs:
           images: ${{ env.IMAGEM }}
           tags: |
             type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern=v{{version}}
+            type=semver,pattern=v{{major}}.{{minor}}
             type=sha,format=long
             type=raw,value=latest,enable={{is_default_branch}}
 
