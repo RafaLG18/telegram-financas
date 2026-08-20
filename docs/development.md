@@ -57,6 +57,25 @@ along. When that matters, create the new table, copy with `INSERT ... SELECT` an
 drop the old one — see
 `migrations/versions/a7c4e91b2d38_translate_schema_to_english.py`.
 
+## Commits
+
+Small, focused commits, each one tied to an issue.
+
+- **One concern per commit.** A rename, a behavior change and a doc update are
+  three commits, not one. If the subject line needs an "and", split it.
+- **Every commit references its issue** with a `Refs #N` line in the body, or
+  `Closes #N` on the one that finishes it. Work that has no issue yet gets one
+  opened first — the issue is where the reasoning lives, and the commit is just
+  the diff.
+- **Each commit leaves the tree working**: tests pass, the app still starts. A
+  reviewer must be able to stop at any commit, and `git bisect` must not land on
+  a broken one.
+- Subject in the imperative and under ~72 chars; the body says *why*, since the
+  diff already says what.
+
+The one exception is the version bump, which goes straight to `main` on its own
+- see below.
+
 ## Release
 
 **Every change becomes a tag and a release, cut from `main`.** The bump is always

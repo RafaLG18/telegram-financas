@@ -76,6 +76,15 @@ Unit tests cover only `core/` and `parse.py` (`session` fixture: in-memory
 SQLite, no Alembic). Handlers are covered end to end by the smoke test — changed
 a handler flow, run `just smoke`.
 
+## Commits
+
+**Small commits, one concern each, every one tied to an issue.** A rename, a
+behavior change and a doc update are three commits, not one — if the subject
+needs an "and", split it. Every commit carries `Refs #N` in the body (`Closes #N`
+on the one that finishes it), and leaves the tree working: tests pass at every
+commit. Work with no issue yet gets one opened first. Details in
+[docs/development.md](docs/development.md#commits).
+
 ## Release
 
 **Every change becomes a tag and a release from `main`**: major `+0.1.0`, minor
