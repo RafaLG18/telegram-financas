@@ -1,6 +1,6 @@
 [project]
 name = "caderneta"
-version = "0.4.0"
+version = "0.4.1"
 description = "Bot de Telegram para controle financeiro pessoal"
 requires-python = ">=3.11"
 dependencies = [
