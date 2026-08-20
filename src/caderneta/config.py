@@ -1,4 +1,4 @@
-"""Configuracao lida do ambiente. Falha cedo e com mensagem clara."""
+"""Configuration read from the environment. Fails early and with a clear message."""
 
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ class Config:
     tz: ZoneInfo
     health_port: int
     log_level: str
-    # Endpoint alternativo da Bot API (Bot API self-hosted ou stub de teste).
-    # Vazio = api.telegram.org.
+    # Alternative Bot API endpoint (self-hosted Bot API or a test stub).
+    # Empty = api.telegram.org.
     telegram_api_url: str | None = None
 
     @property
@@ -53,7 +53,7 @@ def load_config() -> Config:
     tz_name = os.getenv("TZ", "America/Sao_Paulo").strip() or "America/Sao_Paulo"
     try:
         tz = ZoneInfo(tz_name)
-    except Exception as exc:  # noqa: BLE001 - queremos a mensagem amigavel
+    except Exception as exc:  # noqa: BLE001 - we want the friendly message
         raise ConfigError(f"TZ invalido: {tz_name!r}") from exc
 
     return Config(

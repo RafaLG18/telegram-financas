@@ -1,14 +1,14 @@
 image:
-  # Publicada pelo CI (.github/workflows/ci.yml) a cada push no main e em tag.
-  # Para rodar a imagem que voce buildou local: --set image.repository=caderneta
-  # --set image.tag=local (ou `just deploy -i caderneta -t local`).
+  # Published by CI (.github/workflows/ci.yml) on every push to main and on tags.
+  # To run the image you built locally: --set image.repository=caderneta
+  # --set image.tag=local (or `just deploy -i caderneta -t local`).
   repository: ghcr.io/rafalg18/caderneta
-  # Vazio = usa v<appVersion> do Chart.yaml (ex: v0.3.0), que so existe no
-  # registry depois de um `git tag vX.Y.Z` (push no main publica main/sha/latest,
-  # nao a versao).
-  # Sem release publicado, use `just deploy -t latest` ou a tag do sha.
-  # Prefira tag imutavel a `latest`: com pullPolicy IfNotPresent, `latest` fica
-  # velha no node.
+  # Empty = uses v<appVersion> from Chart.yaml (e.g. v0.3.0), which only exists
+  # in the registry after a `git tag vX.Y.Z` (a push to main publishes
+  # main/sha/latest, not the version).
+  # With no release published, use `just deploy -t latest` or the sha tag.
+  # Prefer an immutable tag over `latest`: with pullPolicy IfNotPresent,
+  # `latest` goes stale on the node.
   tag: ""
   pullPolicy: IfNotPresent
 
@@ -16,23 +16,23 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-# ATENCAO: um bot em polling nao pode ter duas replicas. A segunda recebe
-# "409 Conflict: terminated by other getUpdates request" e as duas passam a
-# brigar pelos updates. O chart falha de proposito se isto for > 1.
+# WARNING: a polling bot cannot have two replicas. The second one gets
+# "409 Conflict: terminated by other getUpdates request" and the two start
+# fighting over the updates. The chart fails on purpose if this is > 1.
 replicaCount: 1
 
 telegram:
-  # Opcao 1 (recomendada): referenciar um Secret que voce ja criou fora do Helm,
-  # assim o token nunca passa por values.yaml nem pelo histórico do Helm.
+  # Option 1 (recommended): reference a Secret you created outside of Helm, so
+  # the token never goes through values.yaml nor through the Helm history.
   #   kubectl create secret generic caderneta-token --from-literal=BOT_TOKEN=...
   existingSecret: ""
   existingSecretKey: BOT_TOKEN
 
-  # Opcao 2: o chart cria o Secret. Comodo para teste, pior para producao —
-  # o valor fica no release do Helm.
+  # Option 2: the chart creates the Secret. Handy for testing, worse for
+  # production - the value stays in the Helm release.
   botToken: ""
 
-  # Seu chat_id. Vazio = modo bootstrap (o bot so informa o id de quem falar).
+  # Your chat_id. Empty = bootstrap mode (the bot only reports the caller's id).
   ownerChatId: ""
 
 config:
@@ -43,11 +43,11 @@ config:
 
 persistence:
   enabled: true
-  # O SQLite exige ReadWriteOnce: e um arquivo, nao um servidor.
+  # SQLite requires ReadWriteOnce: it is a file, not a server.
   accessMode: ReadWriteOnce
   size: 1Gi
   storageClass: ""
-  # Reaproveitar um PVC existente (util para restaurar backup).
+  # Reuse an existing PVC (useful to restore a backup).
   existingClaim: ""
 
 service:

@@ -1,7 +1,7 @@
-"""Parsing de texto livre: valor, data e descricao.
+"""Free-text parsing: amount, date and description.
 
-Sem LLM: regra explicita, deterministica e testavel. O fluxo guiado continua
-sendo o caminho principal; isto aqui e o atalho para o uso diario.
+No LLM: explicit rules, deterministic and testable. The guided flow is still the
+main path; this is the shortcut for daily use.
 """
 
 from __future__ import annotations
@@ -11,141 +11,142 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
-_SO_NUMERO = re.compile(r"\d[\d.,]*")
-_DATA_BR = re.compile(r"\b(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\b")
+_ONLY_NUMBER = re.compile(r"\d[\d.,]*")
+_DATE_BR = re.compile(r"\b(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\b")
 
 
-def parse_valor(texto: str) -> int | None:
-    """Converte '50', '50,90', 'R$ 1.250,00' em centavos. None se nao for valor."""
-    t = texto.strip().lower().replace("r$", "").replace(" ", "")
-    if not t or not _SO_NUMERO.fullmatch(t):
+def parse_amount(text: str) -> int | None:
+    """Convert '50', '50,90', 'R$ 1.250,00' into cents. None if not an amount."""
+    t = text.strip().lower().replace("r$", "").replace(" ", "")
+    if not t or not _ONLY_NUMBER.fullmatch(t):
         return None
 
-    tem_virgula, tem_ponto = "," in t, "." in t
+    has_comma, has_dot = "," in t, "." in t
 
-    if tem_virgula and tem_ponto:
-        # O separador mais a direita e o decimal.
+    if has_comma and has_dot:
+        # The rightmost separator is the decimal one.
         if t.rfind(",") > t.rfind("."):
             t = t.replace(".", "").replace(",", ".")
         else:
             t = t.replace(",", "")
-    elif tem_virgula:
+    elif has_comma:
         if t.count(",") > 1:
             return None
         t = t.replace(",", ".")
-    elif tem_ponto:
-        partes = t.split(".")
-        decimal_simples = len(partes) == 2 and len(partes[1]) in (1, 2)
-        if not decimal_simples:
-            # So aceita como separador de milhar se todos os grupos tiverem 3 digitos.
-            if not all(len(p) == 3 for p in partes[1:]):
+    elif has_dot:
+        parts = t.split(".")
+        plain_decimal = len(parts) == 2 and len(parts[1]) in (1, 2)
+        if not plain_decimal:
+            # Only accepted as a thousands separator if every group has 3 digits.
+            if not all(len(p) == 3 for p in parts[1:]):
                 return None
             t = t.replace(".", "")
 
     try:
-        valor = Decimal(t)
+        amount = Decimal(t)
     except InvalidOperation:
         return None
 
-    if valor <= 0:
+    if amount <= 0:
         return None
 
-    centavos = int((valor * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    return centavos or None
+    cents = int((amount * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    return cents or None
 
 
-def parse_data(texto: str, hoje: dt.date) -> tuple[dt.date | None, str]:
-    """Extrai data relativa ou dd/mm do texto. Devolve (data, texto_sem_a_data)."""
-    t = texto.strip()
-    baixo = t.lower()
+def parse_date(text: str, today: dt.date) -> tuple[dt.date | None, str]:
+    """Extract a relative or dd/mm date. Returns (date, text_without_the_date)."""
+    t = text.strip()
+    lower = t.lower()
 
-    for termo, delta in (("anteontem", 2), ("ontem", 1), ("hoje", 0)):
-        if re.search(rf"\b{termo}\b", baixo):
-            limpo = re.sub(rf"\b{termo}\b", " ", baixo, count=1)
-            return hoje - dt.timedelta(days=delta), " ".join(limpo.split())
+    for term, delta in (("anteontem", 2), ("ontem", 1), ("hoje", 0)):
+        if re.search(rf"\b{term}\b", lower):
+            rest = re.sub(rf"\b{term}\b", " ", lower, count=1)
+            return today - dt.timedelta(days=delta), " ".join(rest.split())
 
-    achado = _DATA_BR.search(t)
-    if achado:
-        dia, mes, ano = achado.group(1), achado.group(2), achado.group(3)
+    found = _DATE_BR.search(t)
+    if found:
+        day, month, year = found.group(1), found.group(2), found.group(3)
         try:
-            if ano is None:
-                candidata = dt.date(hoje.year, int(mes), int(dia))
-                # 31/12 lancado em 02/01 quase certamente e do ano passado.
-                if (candidata - hoje).days > 180:
-                    candidata = candidata.replace(year=hoje.year - 1)
+            if year is None:
+                candidate = dt.date(today.year, int(month), int(day))
+                # 31/12 recorded on 02/01 is almost certainly from last year.
+                if (candidate - today).days > 180:
+                    candidate = candidate.replace(year=today.year - 1)
             else:
-                a = int(ano)
-                candidata = dt.date(2000 + a if a < 100 else a, int(mes), int(dia))
+                y = int(year)
+                candidate = dt.date(2000 + y if y < 100 else y, int(month), int(day))
         except ValueError:
             return None, t
-        limpo = (t[: achado.start()] + " " + t[achado.end() :]).strip()
-        return candidata, " ".join(limpo.split())
+        rest = (t[: found.start()] + " " + t[found.end() :]).strip()
+        return candidate, " ".join(rest.split())
 
     return None, t
 
 
-# Passado esse limite a data ainda vale, mas merece um aviso na previa: errar o
-# ano em `15/08/2015` e facil demais para aceitar calado.
-DIAS_DATA_ANTIGA = 730
+# Past this limit the date is still valid, but it deserves a warning in the
+# preview: getting the year wrong in `15/08/2015` is far too easy to accept
+# silently.
+OLD_DATE_DAYS = 730
 
-DATA_OK = "ok"
-DATA_NAO_ENTENDI = "nao_entendi"
-DATA_FUTURA = "futura"
+DATE_OK = "ok"
+DATE_UNPARSED = "unparsed"
+DATE_FUTURE = "future"
 
 
 @dataclass(frozen=True)
-class DataLivre:
-    """Resultado de `parse_data_estrita`. `data` so vem preenchida se motivo=OK."""
+class ParsedDate:
+    """Result of `parse_strict_date`. `date` is only set when reason=DATE_OK."""
 
-    data: dt.date | None
-    motivo: str
+    date: dt.date | None
+    reason: str
 
 
-def parse_data_estrita(texto: str, hoje: dt.date) -> DataLivre:
-    """Le uma mensagem que deve ser *inteira* uma data.
+def parse_strict_date(text: str, today: dt.date) -> ParsedDate:
+    """Read a message that must be *entirely* a date.
 
-    Diferente de `parse_data`, que garimpa a data no meio de uma frase, aqui
-    sobra de texto e erro: quem digita no estado de data nao esta descrevendo o
-    gasto. O motivo volta junto porque o handler precisa dizer coisas diferentes
-    para "nao entendi" e para "isso e no futuro".
+    Unlike `parse_date`, which digs a date out of a sentence, here leftover text
+    is an error: someone typing while in the date state is not describing the
+    expense. The reason comes back too because the handler needs to say different
+    things for "I did not understand" and for "that is in the future".
     """
-    t = texto.strip()
+    t = text.strip()
     if not t:
-        return DataLivre(None, DATA_NAO_ENTENDI)
+        return ParsedDate(None, DATE_UNPARSED)
 
-    data, resto = parse_data(t, hoje)
-    if data is None or resto:
-        return DataLivre(None, DATA_NAO_ENTENDI)
-    if data > hoje:
-        return DataLivre(None, DATA_FUTURA)
-    return DataLivre(data, DATA_OK)
+    date, rest = parse_date(t, today)
+    if date is None or rest:
+        return ParsedDate(None, DATE_UNPARSED)
+    if date > today:
+        return ParsedDate(None, DATE_FUTURE)
+    return ParsedDate(date, DATE_OK)
 
 
 @dataclass(frozen=True)
-class EntradaRapida:
-    valor_centavos: int
-    descricao: str
-    data: dt.date
+class QuickEntry:
+    amount_cents: int
+    description: str
+    date: dt.date
 
 
-def parse_lancamento(texto: str, hoje: dt.date) -> EntradaRapida | None:
-    """'50 mercado', 'mercado 50', '1.250,00 aluguel ontem' -> EntradaRapida."""
-    data, resto = parse_data(texto, hoje)
-    tokens = resto.split()
+def parse_entry(text: str, today: dt.date) -> QuickEntry | None:
+    """'50 mercado', 'mercado 50', '1.250,00 aluguel ontem' -> QuickEntry."""
+    date, rest = parse_date(text, today)
+    tokens = rest.split()
     if not tokens:
         return None
 
     for i, token in enumerate(tokens):
-        centavos = parse_valor(token)
-        if centavos is not None:
-            descricao = " ".join(tokens[:i] + tokens[i + 1 :]).strip()
-            return EntradaRapida(centavos, descricao, data or hoje)
+        cents = parse_amount(token)
+        if cents is not None:
+            description = " ".join(tokens[:i] + tokens[i + 1 :]).strip()
+            return QuickEntry(cents, description, date or today)
 
     return None
 
 
-def formata_valor(centavos: int) -> str:
-    inteiro, resto = divmod(abs(centavos), 100)
-    milhar = f"{inteiro:,}".replace(",", ".")
-    sinal = "-" if centavos < 0 else ""
-    return f"{sinal}R$ {milhar},{resto:02d}"
+def format_amount(cents: int) -> str:
+    whole, rest = divmod(abs(cents), 100)
+    thousands = f"{whole:,}".replace(",", ".")
+    sign = "-" if cents < 0 else ""
+    return f"{sign}R$ {thousands},{rest:02d}"

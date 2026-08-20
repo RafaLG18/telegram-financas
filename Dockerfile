@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
 # ---------------------------------------------------------------------------
-# Builder: resolve as dependencias com uv a partir do lock, sem instalar o
-# projeto (o codigo entra via PYTHONPATH, o que mantem a imagem final simples).
+# Builder: resolves the dependencies with uv from the lock file, without
+# installing the project (the code comes in through PYTHONPATH, which keeps the
+# final image simple).
 # ---------------------------------------------------------------------------
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
@@ -28,12 +29,13 @@ ENV PYTHONUNBUFFERED=1 \
     DB_PATH=/data/caderneta.db \
     HEALTH_PORT=8080
 
-# Atualiza o que a base traz com CVE conhecido e nao instala nada a mais.
+# Upgrades whatever the base image ships with a known CVE and installs nothing
+# else.
 #
-# O pip tambem sai daqui: o venv ja chega pronto do builder, entao ele nunca e
-# usado em runtime — e o codigo que ele traz vendorizado (msgpack, setuptools)
-# e justamente o que aparecia como HIGH no scan do Trivy. Remover e mais honesto
-# que adicionar excecao no .trivyignore.
+# pip goes away too: the venv arrives ready from the builder, so pip is never
+# used at runtime - and the code it vendors (msgpack, setuptools) is exactly what
+# showed up as HIGH in the Trivy scan. Removing it is more honest than adding an
+# exception to .trivyignore.
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
@@ -51,8 +53,8 @@ COPY --chown=10001:10001 alembic.ini ./
 COPY --chown=10001:10001 src ./src
 COPY --chown=10001:10001 scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 
-# O /data e criado com o dono certo aqui para que o volume nomeado herde a
-# permissao — senao o container nao-root nao consegue escrever no SQLite.
+# /data is created with the right owner here so that the named volume inherits
+# the permission - otherwise the non-root container cannot write to SQLite.
 RUN chmod +x /usr/local/bin/entrypoint.sh \
     && mkdir -p /data \
     && chown 10001:10001 /data

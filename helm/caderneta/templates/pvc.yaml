@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "caderneta.labels" . | nindent 4 }}
   annotations:
-    # O banco e o ativo do projeto: nao some junto com `helm uninstall`.
+    # The database is the project's asset: it does not vanish with a `helm uninstall`.
     helm.sh/resource-policy: keep
 spec:
   accessModes:

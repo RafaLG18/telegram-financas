@@ -1,17 +1,17 @@
-"""Ordem importa: `rapido` e catch-all de texto e precisa vir por ultimo."""
+"""Order matters: `quick` is the text catch-all and must come last."""
 
 from aiogram import Router
 
-from . import rapido, registrar, relatorios, start
+from . import quick, record, reports, start
 
 
-def montar_router() -> Router:
-    raiz = Router(name="raiz")
-    raiz.include_router(start.router)
-    raiz.include_router(registrar.router)
-    raiz.include_router(relatorios.router)
-    raiz.include_router(rapido.router)
-    return raiz
+def build_router() -> Router:
+    root = Router(name="root")
+    root.include_router(start.router)
+    root.include_router(record.router)
+    root.include_router(reports.router)
+    root.include_router(quick.router)
+    return root
 
 
-__all__ = ["montar_router"]
+__all__ = ["build_router"]
