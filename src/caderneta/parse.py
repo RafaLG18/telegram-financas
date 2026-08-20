@@ -84,6 +84,43 @@ def parse_data(texto: str, hoje: dt.date) -> tuple[dt.date | None, str]:
     return None, t
 
 
+# Passado esse limite a data ainda vale, mas merece um aviso na previa: errar o
+# ano em `15/08/2015` e facil demais para aceitar calado.
+DIAS_DATA_ANTIGA = 730
+
+DATA_OK = "ok"
+DATA_NAO_ENTENDI = "nao_entendi"
+DATA_FUTURA = "futura"
+
+
+@dataclass(frozen=True)
+class DataLivre:
+    """Resultado de `parse_data_estrita`. `data` so vem preenchida se motivo=OK."""
+
+    data: dt.date | None
+    motivo: str
+
+
+def parse_data_estrita(texto: str, hoje: dt.date) -> DataLivre:
+    """Le uma mensagem que deve ser *inteira* uma data.
+
+    Diferente de `parse_data`, que garimpa a data no meio de uma frase, aqui
+    sobra de texto e erro: quem digita no estado de data nao esta descrevendo o
+    gasto. O motivo volta junto porque o handler precisa dizer coisas diferentes
+    para "nao entendi" e para "isso e no futuro".
+    """
+    t = texto.strip()
+    if not t:
+        return DataLivre(None, DATA_NAO_ENTENDI)
+
+    data, resto = parse_data(t, hoje)
+    if data is None or resto:
+        return DataLivre(None, DATA_NAO_ENTENDI)
+    if data > hoje:
+        return DataLivre(None, DATA_FUTURA)
+    return DataLivre(data, DATA_OK)
+
+
 @dataclass(frozen=True)
 class EntradaRapida:
     valor_centavos: int

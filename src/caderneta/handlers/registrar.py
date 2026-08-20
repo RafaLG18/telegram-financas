@@ -9,6 +9,7 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, Filter
 from aiogram.types import CallbackQuery, Message
+from sqlalchemy.orm import Session
 
 from ..config import Config
 from ..core import (
@@ -26,6 +27,7 @@ from ..keyboards import (
     CB_CATEGORIA,
     CB_CONFIRMA,
     CB_DATA,
+    CB_DATA_LIVRE,
     CB_MUDAR_DATA,
     CB_TIPO,
     teclado_categorias,
@@ -33,14 +35,25 @@ from ..keyboards import (
     teclado_datas,
     teclado_tipo,
 )
-from ..models import E_CATEGORIA, E_CONFIRMACAO, E_TIPO, E_VALOR
-from ..parse import parse_valor
+from ..models import (
+    Rascunho,
+    E_CATEGORIA,
+    E_CONFIRMACAO,
+    E_DATA_LIVRE,
+    E_TIPO,
+    E_VALOR,
+)
+from ..parse import DATA_FUTURA, parse_data_estrita, parse_valor
 from ..textos import previa_rascunho, transacao_registrada
 
 log = logging.getLogger(__name__)
 router = Router(name="registrar")
 
 _EXPIRADO = "Esse lançamento já foi finalizado ou cancelado. Mande /registrar de novo."
+_PERGUNTA_DATA = (
+    "Qual a data? Ex: <code>15/08</code>, <code>15/08/2025</code> ou "
+    "<code>ontem</code>.\n\nOu /cancelar."
+)
 
 
 async def _limpar_teclado(callback: CallbackQuery, texto: str) -> None:
@@ -55,17 +68,35 @@ def _rid(callback: CallbackQuery) -> str:
     return (callback.data or "").split(":")[1]
 
 
-class AguardandoValor(Filter):
-    """Casa qualquer texto enquanto houver rascunho esperando o valor."""
+def _previa(sessao: Session, rascunho: Rascunho, hoje: dt.date) -> str:
+    nome = next(
+        (c.nome for c in listar_categorias(sessao) if c.id == rascunho.categoria_id),
+        None,
+    )
+    return previa_rascunho(rascunho, nome, hoje)
+
+
+class _AguardandoTexto(Filter):
+    """Casa qualquer texto enquanto o rascunho ativo estiver no estado esperado."""
+
+    estado: str
 
     async def __call__(self, message: Message) -> bool | dict:
         if not message.text or message.text.startswith("/"):
             return False
         with session_scope() as sessao:
             rascunho = rascunho_ativo(sessao, message.chat.id)
-            if rascunho is not None and rascunho.estado == E_VALOR:
+            if rascunho is not None and rascunho.estado == self.estado:
                 return {"rascunho_id": rascunho.id}
         return False
+
+
+class AguardandoValor(_AguardandoTexto):
+    estado = E_VALOR
+
+
+class AguardandoData(_AguardandoTexto):
+    estado = E_DATA_LIVRE
 
 
 @router.message(Command("registrar", "novo"))
@@ -162,10 +193,7 @@ async def escolheu_categoria(callback: CallbackQuery, config: Config) -> None:
             return
         rascunho.categoria_id = categoria_id
         rascunho.estado = E_CONFIRMACAO
-        nome = next(
-            (c.nome for c in listar_categorias(sessao) if c.id == categoria_id), None
-        )
-        texto = previa_rascunho(rascunho, nome, hoje)
+        texto = _previa(sessao, rascunho, hoje)
 
     try:
         await callback.message.edit_text(  # type: ignore[union-attr]
@@ -207,15 +235,7 @@ async def escolheu_data(callback: CallbackQuery, config: Config) -> None:
             return
         rascunho.data = hoje - dt.timedelta(days=dias)
         rascunho.estado = E_CONFIRMACAO
-        nome = next(
-            (
-                c.nome
-                for c in listar_categorias(sessao)
-                if c.id == rascunho.categoria_id
-            ),
-            None,
-        )
-        texto = previa_rascunho(rascunho, nome, hoje)
+        texto = _previa(sessao, rascunho, hoje)
 
     try:
         await callback.message.edit_text(  # type: ignore[union-attr]
@@ -223,6 +243,49 @@ async def escolheu_data(callback: CallbackQuery, config: Config) -> None:
         )
     except (TelegramBadRequest, AttributeError):
         log.debug("falha ao voltar pra previa", exc_info=True)
+
+
+@router.callback_query(F.data.startswith(f"{CB_DATA_LIVRE}:"))
+async def pediu_data_livre(callback: CallbackQuery) -> None:
+    await callback.answer()
+    rascunho_id = _rid(callback)
+
+    with session_scope() as sessao:
+        rascunho = pegar_rascunho(sessao, rascunho_id)
+        if rascunho is None:
+            await _limpar_teclado(callback, _EXPIRADO)
+            return
+        rascunho.estado = E_DATA_LIVRE
+
+    await _limpar_teclado(callback, _PERGUNTA_DATA)
+
+
+@router.message(AguardandoData())
+async def recebeu_data(message: Message, rascunho_id: str, config: Config) -> None:
+    hoje = dt.datetime.now(config.tz).date()
+    lida = parse_data_estrita(message.text or "", hoje)
+
+    if lida.data is None:
+        # Sem mexer no rascunho: o valor e a categoria ja digitados continuam
+        # vivos e o proximo texto cai aqui de novo.
+        await message.answer(
+            "Essa data ainda não aconteceu. Lançamento é fato ocorrido — "
+            "manda uma data de hoje ou de antes.\n\nOu /cancelar."
+            if lida.motivo == DATA_FUTURA
+            else f"Não entendi essa data.\n\n{_PERGUNTA_DATA}"
+        )
+        return
+
+    with session_scope() as sessao:
+        rascunho = pegar_rascunho(sessao, rascunho_id)
+        if rascunho is None:
+            await message.answer(_EXPIRADO)
+            return
+        rascunho.data = lida.data
+        rascunho.estado = E_CONFIRMACAO
+        texto = _previa(sessao, rascunho, hoje)
+
+    await message.answer(texto, reply_markup=teclado_confirmacao(rascunho_id))
 
 
 @router.callback_query(F.data.startswith(f"{CB_CONFIRMA}:"))

@@ -14,6 +14,11 @@ Bot de Telegram para controle financeiro pessoal. Uso individual, SQLite, pollin
 O atalho aceita `50`, `50,90`, `R$ 1.250,00`, e datas relativas (`ontem`,
 `anteontem`, `15/08`). Entrada em vez de gasto: comece com `+` (`+3000 salário`).
 
+No fluxo guiado, **📅 Mudar data** oferece hoje/ontem/anteontem e, em
+**📅 Outra data**, aceita qualquer data digitada (`15/08`, `15/08/2025`,
+`ontem`). Data futura é recusada; data de mais de dois anos atrás passa, mas
+sai marcada na prévia.
+
 **Consultar**: `/hoje`, `/mes`, `/extrato`
 **Corrigir**: `/desfazer` (remove o último), `/cancelar` (descarta um fluxo em andamento)
 
